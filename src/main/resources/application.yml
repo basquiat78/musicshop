@@ -1,0 +1,32 @@
+spring:
+  profiles:
+    active: local
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+  r2dbc:
+    url: r2dbc:proxy:mysql://${mysql.host}:${mysql.port}/${mysql.database}?proxyListener=${mysql.proxy-listener}&${mysql.option}
+    username: root
+    password: basquiat
+    pool:
+      enabled: true
+      initial-size: 10
+      max-size: 30
+      max-idle-time: 30m
+      validation-query: SELECT 1
+
+mysql:
+  host: localhost
+  port: 3306
+  database: musicshop
+  proxy-listener: io.basquiat.musicshop.common.listener.QueryLoggingListener
+  option: useSSL=false&useUnicode=yes&characterEncoding=UTF-8&serverTimezone=Asia/Seoul
+
+server:
+  error:
+    whitelabel:
+      enabled: false
+  port: 8080
