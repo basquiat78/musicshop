@@ -1,4 +1,5 @@
 # MusicShop
+
 회사에서 주 언어가 타입스크립트와 고랭이다.
 
 최근 프로젝트는 모두 타입스크립트와 `nest.js`를 이용해 구축해 왔는데 문득 코틀린이 하고 싶어졌다.
@@ -36,7 +37,7 @@
 
 이 저장소에서 이것을 전부 커버하기에는 일단 나 자신이 명확하게 설명하기엔 능력 부족임을 먼저 인정할 수 밖에 없다.
 
-다만 개인적으로 몇 년전부터 `RxJava`나 `reactor proejct`에 대해 관심을 가져지면 자연스럽게 접하게 된 경우이다.
+다만 개인적으로 몇 년전부터 `RxJava`나 `reactor project`에 대해 관심을 가지면서 자연스럽게 접하게 된 경우이다.
 
 이것을 이해하기 위해서는 디자인 패턴 중 `The Observer Pattern`, `The Iterator Pattern`애 대해 어느 정도 알면 좋다.
 
@@ -50,10 +51,12 @@
 
 우리가 먼저 인지해야 하는 것은 `Publisher`이다.
 
-발행자에 대한 개념은 `reactor proejct`에서 `Reactive Stream`의 `Publisher`인터페이스를 구현하는 `Mono`와 `Flux`를 마주하게 된다.
+발행자에 대한 개념은 `reactor project`에서 `Reactive Stream`의 `Publisher`인터페이스를 구현하는 `Mono`와 `Flux`를 마주하게 된다.
 
 여러분이 `WebFlux`를 간지나게 사용하고 싶다면 최소한 위 링크에서 [projectreactor official docs](https://projectreactor.io/docs/core/release/reference/)는 필독하길 권장한다.
 
-어쩌면 이것인 스프링 MVC 패턴에 비해서 러닝커브가 상당히 높이는 이유가 되지 않을까?
+어쩌면 이것인 스프링 MVC 패턴에 비해서 러닝커브가 상당히 높아지는 이유가 되지 않을까?
 
+# Agenda
 
+[01-using-controller-musician](https://github.com/basquiat78/musicshop/tree/01-using-controller-musician)
