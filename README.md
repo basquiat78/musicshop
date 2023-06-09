@@ -30,6 +30,8 @@
 [Spring Initializr](https://start.spring.io/)를 통해서 필요한 라이브러리를 먼저 설정한다.
 
 최종적으로 이 프로젝트에서 사용하는 것은 `build.gradle.kts`를 통해서 확인하면 된다.
+<<<<<<<<< Temporary merge branch 1
+=========
 
 ## Reactive Programming
 
