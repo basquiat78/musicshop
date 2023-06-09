@@ -60,3 +60,5 @@
 # Agenda
 
 [01-using-controller-musician](https://github.com/basquiat78/musicshop/tree/01-using-controller-musician)
+
+[02-using-controller-record](https://github.com/basquiat78/musicshop/tree/02-using-controller-record)
