@@ -9,7 +9,7 @@ enum class ConditionType(
     val code: String,
     private val criteria: (WhereCondition) -> Criteria
 ) {
-    LTE("lte", { where(it.column).lessThan(it.value)}),
+    LTE("lte", { where(it.column).lessThanOrEquals(it.value)}),
     LT("lt", { where(it.column).lessThan(it.value)}),
     GTE("gte", { where(it.column).greaterThanOrEquals(it.value)}),
     GT("gt", { where(it.column).greaterThan(it.value)}),
