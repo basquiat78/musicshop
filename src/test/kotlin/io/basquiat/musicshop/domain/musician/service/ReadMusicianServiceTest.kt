@@ -1,7 +1,5 @@
 package io.basquiat.musicshop.domain.musician.service
 
-import io.basquiat.musicshop.common.model.request.QueryPage
-import io.basquiat.musicshop.domain.musician.model.code.Genre
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -10,7 +8,6 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.data.relational.core.query.Criteria
 import org.springframework.data.relational.core.query.Criteria.where
 import org.springframework.data.relational.core.query.Query.query
-import org.springframework.data.relational.core.query.isEqual
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import reactor.test.StepVerifier
@@ -132,6 +129,21 @@ class ReadMusicianServiceTest @Autowired constructor(
 			 	assertThat(it).isEqualTo(1)
 			 }
 			 .verifyComplete()
+	}
+
+	@Test
+	@DisplayName("musician with records test")
+	fun musicianWithRecordsTEST() {
+		// given
+		val id = 10L
+
+		val musician = read.musicianWithRecords(id)
+		musician.`as`(StepVerifier::create)
+				.assertNext {
+					assertThat(it.name).isEqualTo("스윙스")
+					assertThat(it.records!!.size).isEqualTo(5)
+				}
+				.verifyComplete()
 	}
 
 }

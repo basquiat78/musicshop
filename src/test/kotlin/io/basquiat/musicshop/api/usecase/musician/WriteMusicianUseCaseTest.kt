@@ -2,9 +2,6 @@ package io.basquiat.musicshop.api.usecase.musician
 
 import io.basquiat.musicshop.api.usecase.musician.model.CreateMusician
 import io.basquiat.musicshop.api.usecase.musician.model.UpdateMusician
-import io.basquiat.musicshop.common.exception.BadParameterException
-import io.basquiat.musicshop.common.transaction.Transaction
-import io.basquiat.musicshop.domain.musician.model.Musician
 import io.basquiat.musicshop.domain.musician.model.code.Genre
 import io.basquiat.musicshop.domain.musician.service.ReadMusicianService
 import org.assertj.core.api.Assertions.assertThat
@@ -12,11 +9,9 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.data.relational.core.sql.SqlIdentifier
 import org.springframework.test.context.TestExecutionListeners
 import org.springframework.test.context.transaction.TransactionalTestExecutionListener
 import reactor.test.StepVerifier
-import java.time.LocalDateTime.now
 
 @SpringBootTest
 @TestExecutionListeners(

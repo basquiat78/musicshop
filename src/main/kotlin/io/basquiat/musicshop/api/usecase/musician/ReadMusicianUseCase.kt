@@ -2,7 +2,7 @@ package io.basquiat.musicshop.api.usecase.musician
 
 import io.basquiat.musicshop.common.builder.createQuery
 import io.basquiat.musicshop.common.model.request.QueryPage
-import io.basquiat.musicshop.domain.musician.model.Musician
+import io.basquiat.musicshop.domain.musician.model.entity.Musician
 import io.basquiat.musicshop.domain.musician.service.ReadMusicianService
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
