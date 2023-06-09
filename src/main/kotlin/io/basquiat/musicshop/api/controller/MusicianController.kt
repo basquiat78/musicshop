@@ -5,16 +5,14 @@ import io.basquiat.musicshop.api.usecase.musician.WriteMusicianUseCase
 import io.basquiat.musicshop.api.usecase.musician.model.CreateMusician
 import io.basquiat.musicshop.api.usecase.musician.model.UpdateMusician
 import io.basquiat.musicshop.common.model.request.QueryPage
-import io.basquiat.musicshop.domain.musician.model.Musician
+import io.basquiat.musicshop.domain.musician.model.entity.Musician
 import jakarta.validation.Valid
 import org.springframework.data.domain.Page
 import org.springframework.http.HttpStatus
 import org.springframework.util.MultiValueMap
-import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.*
 import reactor.core.publisher.Mono
 
-@Validated
 @RestController
 @RequestMapping("/api/v1/musicians")
 class MusicianController(
@@ -23,8 +21,11 @@ class MusicianController(
 ) {
 
     @GetMapping("/query/{queryCondition}")
-    fun fetchMusicians(@Valid queryPage: QueryPage,
-                       @MatrixVariable(pathVar = "queryCondition", required = false) matrixVariable: MultiValueMap<String, Any>): Mono<Page<Musician>> {
+    @ResponseStatus(HttpStatus.OK)
+    fun fetchMusicians(
+        @Valid queryPage: QueryPage,
+        @MatrixVariable(pathVar = "queryCondition", required = false) matrixVariable: MultiValueMap<String, Any>
+    ): Mono<Page<Musician>> {
         return readMusicianUseCase.musiciansByQuery(queryPage, matrixVariable)
     }
 

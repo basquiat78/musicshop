@@ -3,7 +3,7 @@ package io.basquiat.musicshop.api.usecase.musician
 import io.basquiat.musicshop.api.usecase.musician.model.CreateMusician
 import io.basquiat.musicshop.api.usecase.musician.model.UpdateMusician
 import io.basquiat.musicshop.common.exception.BadParameterException
-import io.basquiat.musicshop.domain.musician.model.Musician
+import io.basquiat.musicshop.domain.musician.model.entity.Musician
 import io.basquiat.musicshop.domain.musician.service.ReadMusicianService
 import io.basquiat.musicshop.domain.musician.service.WriteMusicianService
 import org.springframework.stereotype.Service
