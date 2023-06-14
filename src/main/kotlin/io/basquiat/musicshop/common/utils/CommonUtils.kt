@@ -3,33 +3,34 @@ package io.basquiat.musicshop.common.utils
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import io.basquiat.musicshop.common.exception.MissingInformationException
+import io.basquiat.musicshop.common.exception.BadParameterException
 import io.basquiat.musicshop.common.exception.NotFoundException
-import reactor.core.publisher.Mono
 
 /**
  * 메세지가 없는 경우
  */
-fun <T> notFound(): Mono<T> = Mono.error(NotFoundException())
+fun notFound(): Nothing {
+    throw NotFoundException()
+}
 
 /**
  * 메세지가 있는 경우
  *
  * @param message
  */
-fun <T> missingInfo(message: String?): Mono<T> = message?.let { Mono.error(MissingInformationException(it)) } ?: missingInfo()
+fun notFound(message: String?): Nothing {
+    if(message == null) {
+        notFound()
+    } else {
+        throw NotFoundException(message)
+    }
+}
 
-/**
- * 메세지가 없는 경우
- */
-fun <T> missingInfo(): Mono<T> = Mono.error(MissingInformationException())
-
-/**
- * 메세지가 있는 경우
- *
- * @param message
- */
-fun <T> notFound(message: String?): Mono<T> = message?.let { Mono.error(NotFoundException(it)) } ?: notFound()
+fun isParamBlankThrow(value: String) {
+    if(value.isBlank()) {
+        throw BadParameterException("빈 공백은 허용하지 않습니다.")
+    }
+}
 
 /**
  * kotlin jackson object mapper

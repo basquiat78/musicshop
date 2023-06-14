@@ -5,40 +5,44 @@ import io.basquiat.musicshop.domain.musician.model.entity.Musician
 import io.basquiat.musicshop.domain.musician.repository.custom.CustomMusicianRepository
 import io.basquiat.musicshop.domain.record.model.code.ReleasedType
 import io.basquiat.musicshop.domain.record.model.entity.Record
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.reactive.awaitFirst
+import kotlinx.coroutines.reactive.awaitSingle
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate
+import org.springframework.data.r2dbc.core.flow
 import org.springframework.data.relational.core.query.Criteria.where
 import org.springframework.data.relational.core.query.Query
 import org.springframework.data.relational.core.query.Query.query
 import org.springframework.data.relational.core.query.Update
 import org.springframework.data.relational.core.sql.SqlIdentifier
-import reactor.core.publisher.Flux
-import reactor.core.publisher.Mono
 import java.time.LocalDateTime
 
 class CustomMusicianRepositoryImpl(
     private val query: R2dbcEntityTemplate,
 ): CustomMusicianRepository {
 
-    override fun updateMusician(musician: Musician, assignments: MutableMap<SqlIdentifier, Any>): Mono<Musician> {
+    override suspend fun updateMusician(musician: Musician, assignments: MutableMap<SqlIdentifier, Any>): Musician {
         return query.update(Musician::class.java)
                     .matching(query(where("id").`is`(musician.id!!)))
                     .apply(Update.from(assignments))
                     .thenReturn(musician)
+                    .awaitSingle()
     }
 
-    override fun musiciansByQuery(match: Query): Flux<Musician> {
+    override fun musiciansByQuery(match: Query): Flow<Musician> {
         return query.select(Musician::class.java)
                     .matching(match)
-                    .all()
+                    .flow()
     }
 
-    override fun totalCountByQuery(match: Query): Mono<Long> {
+    override suspend fun totalCountByQuery(match: Query): Long {
         return query.select(Musician::class.java)
                     .matching(match)
                     .count()
+                    .awaitSingle()
     }
 
-    override fun musicianWithRecords(id: Long): Mono<Musician> {
+    override suspend fun musicianWithRecords(id: Long): Musician? {
         var sql = """
             SELECT musician.id,
                    musician.name,
@@ -88,7 +92,7 @@ class CustomMusicianRepositoryImpl(
                         musician.records = records
                         musician
                     }
-                    .next()
+                    .awaitFirst()
     }
 
 }

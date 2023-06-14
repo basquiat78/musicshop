@@ -1,10 +1,10 @@
 package io.basquiat.musicshop.domain.record.service
 
 import io.basquiat.musicshop.common.exception.BadParameterException
-import io.basquiat.musicshop.domain.musician.model.code.Genre
 import io.basquiat.musicshop.domain.record.model.code.RecordFormat
 import io.basquiat.musicshop.domain.record.model.code.ReleasedType
 import io.basquiat.musicshop.domain.record.model.entity.Record
+import kotlinx.coroutines.test.runTest
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -13,7 +13,6 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.data.relational.core.sql.SqlIdentifier
 import org.springframework.test.context.TestExecutionListeners
 import org.springframework.test.context.transaction.TransactionalTestExecutionListener
-import reactor.test.StepVerifier
 
 @SpringBootTest
 @TestExecutionListeners(
@@ -27,37 +26,33 @@ class WriteRecordServiceTest @Autowired constructor(
 
 	@Test
 	@DisplayName("record create test")
-	fun createRecordTEST() {
+	fun createRecordTEST() = runTest {
 		// given
 		val formats = listOf(RecordFormat.CD, RecordFormat.LP).joinToString(separator = ",") { it.name }
 		val createdRecord = Record(
-			musicianId = 1,
-			title = "Nows The Time",
-			label = "Verve",
+			musicianId = 24,
+			title = "Pres Lives",
+			label = "Savoy Records",
 			format = formats,
 			releasedType = ReleasedType.FULL,
-			releasedYear = 1957,
+			releasedYear = 1977,
 		)
 
 		// when
-		val mono = write.create(createdRecord)
+		val created = write.create(createdRecord)
 
 		// then
-		mono.`as`(StepVerifier::create)
-			.assertNext {
-				assertThat(it.id).isGreaterThan(0L)
-			}
-			.verifyComplete()
+		assertThat(created.id).isGreaterThan(0L)
 	}
 
 	@Test
 	@DisplayName("record update using builder test")
-	fun updateRecordTEST() {
+	fun updateRecordTEST() = runTest {
 		// given
-		val id = 1L
-		val title = "Now's The Time"
+		val target = read.recordByIdOrThrow(24)
 
-		val target = read.recordByIdOrThrow(1)
+		val id = target.id!!
+		val title = "Pres Lives!"
 
 		val assignments = mutableMapOf<SqlIdentifier, Any>()
 		title?.let {
@@ -68,16 +63,11 @@ class WriteRecordServiceTest @Autowired constructor(
 		}
 
 		// when
-		val updated = target.flatMap {
-			write.update(it, assignments)
-		}.then(read.recordById(1))
+		write.update(target, assignments)
+		val updated = read.recordById(target.id!!)!!
 
 		// then
-		updated.`as`(StepVerifier::create)
-			   .assertNext {
-					assertThat(it.title).isEqualTo(title)
-			   }
-			   .verifyComplete()
+		assertThat(updated.title).isEqualTo(title)
 	}
 
 }
