@@ -1,26 +1,29 @@
 package io.basquiat.musicshop.common.constraint
 
-import io.basquiat.musicshop.common.exception.BadParameterException
 import jakarta.validation.ConstraintValidator
 import jakarta.validation.ConstraintValidatorContext
 
-class EnumValueValidator: ConstraintValidator<EnumCheck, Enum<*>> {
+class EnumValueValidator: ConstraintValidator<EnumCheck, String?> {
 
-    private var valueList: Array<Enum<*>> = arrayOf()
+    private lateinit var annotation: EnumCheck
 
-    override fun isValid(value: Enum<*>, context: ConstraintValidatorContext): Boolean {
-        return valueList.contains(value)
+    override fun isValid(value: String?, context: ConstraintValidatorContext): Boolean {
+        return value?.let {
+            val enumValues = this.annotation.enumClazz.java.enumConstants
+            val checkedEnum = enumValues.firstOrNull { it.name.equals(value, ignoreCase = true) }
+            checkedEnum != null
+        } ?: checked()
     }
 
     override fun initialize(constraintAnnotation: EnumCheck) {
-        val enumClass: Class<out Enum<*>> = constraintAnnotation.enumClazz.java
-        val enumValueList = constraintAnnotation.values.toList()
-        val enumValues: Array<Enum<*>> = enumClass.enumConstants as Array<Enum<*>>
-        try {
-            valueList = enumValues.filter { enum -> enumValueList.contains(enum.name) }
-                                  .toTypedArray()
-        } catch (e: Exception) {
-            throw BadParameterException()
-        }
+        this.annotation = constraintAnnotation
     }
+
+    private fun checked(): Boolean {
+        if(annotation.permitNull) {
+            return true
+        }
+        return false
+    }
+
 }

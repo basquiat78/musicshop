@@ -1,6 +1,6 @@
 package io.basquiat.musicshop.domain.musician.service
 
-import io.basquiat.musicshop.api.usecase.musician.model.UpdateMusician
+import io.basquiat.musicshop.api.router.musician.model.UpdateMusician
 import io.basquiat.musicshop.common.transaction.Transaction
 import io.basquiat.musicshop.domain.musician.model.code.Genre
 import io.basquiat.musicshop.domain.musician.model.entity.Musician
@@ -71,10 +71,10 @@ class WriteMusicianServiceTest @Autowired constructor(
 		// given
 		val id = 1L
 
-		val command = UpdateMusician(name = "Charlie Parker", genre = Genre.POP)
+		val command = UpdateMusician(name = "Charlie Parker", genre = Genre.POP.name)
 		//val command = UpdateMusician(null, null)
 
-		val target = read.musicianByIdOrThrow(1)
+		val target = read.musicianByIdOrThrow(id)
 
 		// when
 		val updated = target.flatMap {
