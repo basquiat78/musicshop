@@ -1,19 +1,20 @@
 package io.basquiat.musicshop.domain.record.repository
 
+import io.basquiat.musicshop.common.repository.BaseRepository
 import io.basquiat.musicshop.domain.record.model.entity.Record
 import io.basquiat.musicshop.domain.record.repository.custom.CustomRecordRepository
+import kotlinx.coroutines.flow.Flow
 import org.springframework.data.domain.Pageable
 import org.springframework.data.r2dbc.repository.Query
-import org.springframework.data.r2dbc.repository.R2dbcRepository
 import org.springframework.data.repository.query.Param
-import reactor.core.publisher.Flux
-import reactor.core.publisher.Mono
 
-interface RecordRepository: R2dbcRepository<Record, Long>, CustomRecordRepository {
-    override fun findById(id: Long): Mono<Record>
-    fun findByMusicianId(id: Long, pageable: Pageable): Flux<Record>
+interface RecordRepository: BaseRepository<Record, Long>, CustomRecordRepository {
+    override suspend fun findById(id: Long): Record?
+
+    fun findByMusicianId(id: Long, pageable: Pageable): Flow<Record>
+
     @Query("SELECT COUNT(id) FROM record WHERE musician_id = :musicianId")
-    fun countByMusicianId(@Param("musicianId") musicianId: Long): Mono<Long>
+    suspend fun countByMusicianId(@Param("musicianId") musicianId: Long): Long
 
     @Query("""
             SELECT musician.name AS musicianName,
@@ -25,6 +26,6 @@ interface RecordRepository: R2dbcRepository<Record, Long>, CustomRecordRepositor
               INNER JOIN musician
               ON record.musician_id = musician.id
         """)
-    fun findRecords(): Flux<Record>
+    fun findRecords(): Flow<Record>
 
 }

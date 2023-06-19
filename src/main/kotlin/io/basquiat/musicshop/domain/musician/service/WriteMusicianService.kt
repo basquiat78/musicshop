@@ -4,16 +4,15 @@ import io.basquiat.musicshop.domain.musician.model.entity.Musician
 import io.basquiat.musicshop.domain.musician.repository.MusicianRepository
 import org.springframework.data.relational.core.sql.SqlIdentifier
 import org.springframework.stereotype.Service
-import reactor.core.publisher.Mono
 
 @Service
 class WriteMusicianService(
     private val musicianRepository: MusicianRepository,
 ) {
-    fun create(musician: Musician): Mono<Musician> {
+    suspend fun create(musician: Musician): Musician {
         return musicianRepository.save(musician)
     }
-    fun update(musician: Musician, assignments: MutableMap<SqlIdentifier, Any>): Mono<Musician> {
+    suspend fun update(musician: Musician, assignments: MutableMap<SqlIdentifier, Any>): Musician {
         return musicianRepository.updateMusician(musician, assignments)
     }
 }

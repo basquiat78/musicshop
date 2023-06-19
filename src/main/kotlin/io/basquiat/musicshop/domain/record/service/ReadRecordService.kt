@@ -10,10 +10,11 @@ class ReadRecordService(
     private val recordRepository: RecordRepository,
 ) {
 
-    fun recordById(id: Long) = recordRepository.findById(id)
-    fun recordByIdOrThrow(id: Long, message: String? = null) = recordRepository.findByIdOrThrow(id, message)
+    suspend fun recordById(id: Long) = recordRepository.findById(id)
+    suspend fun recordByIdOrThrow(id: Long, message: String? = null) = recordRepository.findByIdOrThrow(id, message)
+    suspend fun recordCountByMusician(musicianId: Long) = recordRepository.countByMusicianId(musicianId)
+
     fun recordByMusicianId(musicianId: Long, pageable: Pageable) = recordRepository.findByMusicianId(musicianId, pageable)
-    fun recordCountByMusician(musicianId: Long) = recordRepository.countByMusicianId(musicianId)
     fun allRecords(whereClause: String = "",
                    orderClause: String = "",
                    limitClause: String = "") = recordRepository.findAllRecords(whereClause, orderClause, limitClause)

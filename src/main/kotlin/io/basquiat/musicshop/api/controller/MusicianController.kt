@@ -11,7 +11,6 @@ import org.springframework.data.domain.Page
 import org.springframework.http.HttpStatus
 import org.springframework.util.MultiValueMap
 import org.springframework.web.bind.annotation.*
-import reactor.core.publisher.Mono
 
 @RestController
 @RequestMapping("/api/v1/musicians")
@@ -22,28 +21,28 @@ class MusicianController(
 
     @GetMapping("/query/{queryCondition}")
     @ResponseStatus(HttpStatus.OK)
-    fun fetchMusicians(
+    suspend fun fetchMusicians(
         @Valid queryPage: QueryPage,
         @MatrixVariable(pathVar = "queryCondition", required = false) matrixVariable: MultiValueMap<String, Any>
-    ): Mono<Page<Musician>> {
+    ): Page<Musician> {
         return readMusicianUseCase.musiciansByQuery(queryPage, matrixVariable)
     }
 
     @GetMapping("/{id}")
     @ResponseStatus(HttpStatus.OK)
-    fun fetchMusician(@PathVariable("id") id: Long): Mono<Musician> {
+    suspend fun fetchMusician(@PathVariable("id") id: Long): Musician {
         return readMusicianUseCase.musicianById(id)
     }
 
     @PostMapping("")
     @ResponseStatus(HttpStatus.CREATED)
-    fun createMusician(@RequestBody @Valid command: CreateMusician): Mono<Musician> {
+    suspend fun createMusician(@RequestBody @Valid command: CreateMusician): Musician {
         return writeMusicianUseCase.insert(command)
     }
 
     @PatchMapping("/{id}")
     @ResponseStatus(HttpStatus.OK)
-    fun updateMusician(@PathVariable("id") id: Long, @RequestBody command: UpdateMusician): Mono<Musician> {
+    suspend fun updateMusician(@PathVariable("id") id: Long, @RequestBody command: UpdateMusician): Musician {
         return writeMusicianUseCase.update(id, command)
     }
 

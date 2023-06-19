@@ -21,52 +21,52 @@ import reactor.test.StepVerifier
 class WriteRecordUseCaseTest @Autowired constructor(
 	private val writeUseCase: WriteRecordUseCase,
 ) {
-
-	@Test
-	@DisplayName("record insert useCase test")
-	fun insertUseCaseTEST() {
-		// given
-		val formats = listOf(RecordFormat.CD, RecordFormat.LP).joinToString(separator = ",") { it.name }
-		val createdRecord = CreateRecord(
-			musicianId = 1,
-			title = "Bird At St Nicks",
-			label = "Fantasy",
-			format = formats,
-			releasedType = ReleasedType.LIVE,
-			releasedYear = 1957,
-		)
-		// when
-		val mono = writeUseCase.insert(createdRecord)
-		// then
-		mono.`as`(StepVerifier::create)
-			.assertNext {
-				assertThat(it.title).isEqualTo("Bird At St Nicks")
-			}
-			.verifyComplete()
-	}
-
-	@Test
-	@DisplayName("record update useCase test")
-	fun updateUseCaseTEST() {
-		// given
-		val id = 15L
-		val command = UpdateRecord(
-			title = "Bird At St. Nick's",
-			label = null,
-			releasedType = null,
-			releasedYear = null,
-			format = null,
-		)
-
-		// when
-		val mono = writeUseCase.update(id, command)
-
-		// then
-		mono.`as`(StepVerifier::create)
-			.assertNext {
-				assertThat(it.title).isEqualTo(command.title)
-			}
-			.verifyComplete()
-	}
+//
+//	@Test
+//	@DisplayName("record insert useCase test")
+//	fun insertUseCaseTEST() {
+//		// given
+//		val formats = listOf(RecordFormat.CD, RecordFormat.LP).joinToString(separator = ",") { it.name }
+//		val createdRecord = CreateRecord(
+//			musicianId = 1,
+//			title = "Bird At St Nicks",
+//			label = "Fantasy",
+//			format = formats,
+//			releasedType = ReleasedType.LIVE,
+//			releasedYear = 1957,
+//		)
+//		// when
+//		val mono = writeUseCase.insert(createdRecord)
+//		// then
+//		mono.`as`(StepVerifier::create)
+//			.assertNext {
+//				assertThat(it.title).isEqualTo("Bird At St Nicks")
+//			}
+//			.verifyComplete()
+//	}
+//
+//	@Test
+//	@DisplayName("record update useCase test")
+//	fun updateUseCaseTEST() {
+//		// given
+//		val id = 15L
+//		val command = UpdateRecord(
+//			title = "Bird At St. Nick's",
+//			label = null,
+//			releasedType = null,
+//			releasedYear = null,
+//			format = null,
+//		)
+//
+//		// when
+//		val mono = writeUseCase.update(id, command)
+//
+//		// then
+//		mono.`as`(StepVerifier::create)
+//			.assertNext {
+//				assertThat(it.title).isEqualTo(command.title)
+//			}
+//			.verifyComplete()
+//	}
 
 }

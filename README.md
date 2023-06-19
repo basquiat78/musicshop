@@ -1,113 +1,90 @@
-# MusicShop Using Controller Version
+# MusicShop Using coroutine extension
 
-## Before
+이 방식은 기존의 프로듀서인 `Flux`, `Mono`가 아닌 일반적인 `Web MVC`방식과 거의 흡사하다.
 
-`Repository`에서 현재 사용하는 `ReactiveCrudRepository`대신 `R2dbcRepository`로 교체한다.
+# Before
+
+이런 방식을 사용하기 위해서는 코틀린에서 제공하는 라이브러리를 먼저 그레이들에 설정하자.
+
+```groovy
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
+plugins {
+    id("org.springframework.boot") version "3.1.0"
+    id("io.spring.dependency-management") version "1.1.0"
+    kotlin("jvm") version "1.8.21"
+    kotlin("plugin.spring") version "1.8.21"
+}
+
+group = "io.basquiat"
+version = "0.0.1-SNAPSHOT"
+java.sourceCompatibility = JavaVersion.VERSION_17
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.springframework.boot:spring-boot-starter-data-r2dbc")
+    implementation("org.springframework.boot:spring-boot-starter-webflux")
+    implementation("org.springframework.boot:spring-boot-starter-validation")
+    
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    
+    implementation("io.r2dbc:r2dbc-proxy:1.1.1.RELEASE")
+    
+    implementation("io.projectreactor.kotlin:reactor-kotlin-extensions")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
+    
+    implementation("org.jetbrains.kotlin:kotlin-reflect")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
+    
+    implementation("mysql:mysql-connector-java:8.0.33")
+    implementation("com.github.jasync-sql:jasync-r2dbc-mysql:2.1.24")
+    
+    developmentOnly("org.springframework.boot:spring-boot-devtools")
+    
+    testImplementation("io.projectreactor:reactor-test")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.1")
+    testImplementation("org.springframework.boot:spring-boot-starter-test") {
+        exclude(module = "junit-vintage-engine")
+    }
+
+}
+
+tasks.withType<KotlinCompile> {
+    kotlinOptions {
+        freeCompilerArgs = listOf("-Xjsr305=strict")
+        jvmTarget = "17"
+    }
+}
+
+tasks.withType<Test> {
+    useJUnitPlatform()
+}
+
+```
+`io.projectreactor.kotlin:reactor-kotlin-extensions`, `org.jetbrains.kotlinx:kotlinx-coroutines-reactor`을 추가한다.
+
+그리고 테스트를 위한 `org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.1`도 같이 설정하자.
+
+# BaseRepository 설정
+
+이 방식을 사용할 때 몇 가지 추가적인 부분이 있다.
+
+기존 방식을 유지하기 위해서는 `R2dbcRepository`가 아닌 `CoroutineCrudRepository`을 사용해야 한다.
+
+따라서 다음과 같이 공통으로 사용할 녀석을 정의하자.
 
 ```kotlin
 @NoRepositoryBean
-public interface R2dbcRepository<T, ID> extends ReactiveCrudRepository<T, ID>, ReactiveSortingRepository<T, ID>, ReactiveQueryByExampleExecutor<T> {}
+interface BaseRepository<M, ID>: CoroutineCrudRepository<M, ID>, CoroutineSortingRepository<M, ID>
 ```
 
-## create Record API
+# CustomCrudRepositoryExtensions 수정
 
-뮤지션은 음반을 갖는다.
-
-그것이 싱글이든 정규 음반이든 뭔든 존재할 것이다.
-
-관련 디비 스키마를 먼저 만들어 보자.
-
-```roomsql
--- musicshop.record definition
-CREATE TABLE `record` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `musician_id` bigint NOT NULL,
-  `title` varchar(255) NOT NULL,
-  `label` varchar(100) NOT NULL,
-  `released_type` varchar(50) NOT NULL,
-  `released_year` int NOT NULL, -- 2023
-  `format` varchar(100) NOT NULL,
-  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  CONSTRAINT `record_FK` FOREIGN KEY (`musician_id`) REFERENCES `musician` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-```
-기본적으로 음반이 어느 뮤지션의 음반인지 그리고 음반 타이틀과 발매일과 발매 타입 정보를 갖는다.
-
-또한 음반은 LP, CD, 테이프, 디지털음원 같은 포맷을 갖을 수 있다.
-
-피지컬 없이 디지털 음원으로만 발표하는 경우도 있기 때문에 이 부분을 코드로 대처한다.
-
-```kotlin
-enum class RecordFormat(
-    val description: String,
-) {
-    
-    TAPE("테이프"),
-    CD("시디"),
-    LP("엘피"),
-    DIGITAL("디지털 음원"),
-    DIGITALONLY("디지털 음원 온리");
-    
-}
-enum class ReleasedType(
-    val description: String,
-) {
-    SINGLE("싱글"),
-    FULL("정규 음반"),
-    EP("EP"),
-    OST("o.s.t."),
-    COMPILATION("컴필레이션 음반"),
-    LIVE("라이브 음반"),
-    MIXTAPE("믹스테잎");
-}
-```
-엔티티를 정의해보자.
-
-```kotlin
-@Table("record")
-@JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonIgnoreProperties(ignoreUnknown = true)
-class Record(
-    @Id
-    var id: Long? = null,
-    @Column("musician_id")
-    var musicianId: Long,
-    var title: String,
-    var label: String,
-    @Column("released_type")
-    var releasedType: ReleasedType,
-    @Column("released_year")
-    var releasedYear: String,
-    @Column("created_at")
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    var createdAt: LocalDateTime? = now(),
-    @Column("updated_at")
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    var updatedAt: LocalDateTime? = null,
-)
-```
-
-실제 [discogs](https://www.discogs.com/)나 몇 몇 해외 음반 사이트를 보면 참여한 뮤지션들의 정보나 세세한 정보들을 담고 있다.
-
-하지만 이 프로젝트는 먼저 심플한 음반들의 정보만을 담을 생각이다.
-
-뮤지션과 관련된 `API`를 작성한 방식으로 먼저 기본적인 `API`와 테스트 코드는 미리 작업을 해 놓았다.
-
-따라서 해당 테스트의 대한 방식은 이전 브랜치에서 확인하면 된다.
-
-진행하는 방식은 그다지 크게 달라진 것은 없다.
-
-해당 코드는 확인하면 될 것이다.
-
-이 후 진행하는 부분은 몇 가지 커스텀할 수 있는 부분에 대해서 진행할 생각이다.
-
-## 변경점
-
-`CustomCrudRepositoryExtensions`를 수정했다.
-
-메세지가 필요하다면 메세지를 반을 수 있고 메세지가 없다면 정해진 메세지를 던질 수 있도록 처리한다.
+기존에 우리가 사용하던 코드이다.
 
 ```kotlin
 fun <T, ID> R2dbcRepository<T, ID>.findByIdOrThrow(id: ID, message: String? = null): Mono<T> {
@@ -116,957 +93,118 @@ fun <T, ID> R2dbcRepository<T, ID>.findByIdOrThrow(id: ID, message: String? = nu
 
 }
 ```
-이에 따른 각 `Read`쪽 서비스도 변경한다.
+
+하지만 이제는 이것을 사용하지 않고 아래 것을 사용하자.
 
 ```kotlin
-@Service
-class WriteRecordUseCase(
-    private val readMusician: ReadMusicianService,
-    private val read: ReadRecordService,
-    private val write: WriteRecordService,
-) {
-
-    fun insert(command: CreateRecord): Mono<Record> {
-        val created = Record(
-            musicianId = command.musicianId,
-            title = command.title,
-            label = command.label,
-            releasedType = command.releasedType,
-            releasedYear = command.releasedYear,
-            format = command.format,
-        )
-        val musician = readMusician.musicianByIdOrThrow(command.musicianId, "해당 레코드의 뮤지션 정보가 조회되지 않습니다. 뮤지션 아이디를 확인하세요.")
-        return musician.flatMap {
-            write.create(created)
-        }
-    }
-
-    fun update(id: Long, command: UpdateRecord): Mono<Record> {
-        return read.recordByIdOrThrow(id).flatMap { record ->
-            val (record, assignments) = command.createAssignments(record)
-            write.update(record, assignments)
-        }.onErrorResume {
-            Mono.error(BadParameterException(it.message))
-        }
-        .then(read.recordById(id))
-    }
-
+suspend fun <T, ID> CoroutineCrudRepository<T, ID>.findByIdOrThrow(id: ID, message: String? = null): T {
+    return this.findById(id) ?: notFound(message)
 }
 ```
-레코드 정보를 생성할 때 몇가지 방법이 있지만 가장 이상적인 것은 넘어온 뮤지션의 정보가 디비상에 존재하는지 먼저 확인하는 방법이다.
+여기서 `suspend`가 붙은 것을 볼 수 있다.
 
-보통 `record`테이블과 `musician`테이블의 구조를 볼 때 다음과 같이
+또한 `Mono`가 아닌 일반적인 `Web MVC`의 패턴을 따라간다.
 
-```
-CONSTRAINT `record_FK` FOREIGN KEY (`musician_id`) REFERENCES `musician` (`id`)
-```
-`record`테이블을 기준으로 뮤지션 아이디의 정보를 외래키로 잡는다.
-
-만일 레코드 정보를 생성할 때 `musician`테이블의 키 존재 유무로 없는 뮤지션의 아이디로 넣을 경우 디비에서 `mysql Error 1452 - #23000` 에러를 뱉게되어 있다.
-
-즉 외래키 제약 조건으로 인한 에러가 발생한다.
-
-이렇게 에러를 던지는 방식보다는 먼저 뮤지션을 조회하고 없으면 클라이언트로 명확한 메세지를 던저주는 방식이 직관적일 수 있다.
+실제로 `CoroutineCrudRepository`를 보면
 
 ```kotlin
-val musician = readMusician.musicianByIdOrThrow(command.musicianId, "해당 레코드의 뮤지션 정보가 조회되지 않습니다. 뮤지션 아이디를 확인하세요.")
-return musician.flatMap {
-    write.create(created)
+@NoRepositoryBean
+interface CoroutineCrudRepository<T, ID> : Repository<T, ID> {
+	suspend fun <S : T> save(entity: S): T
+	fun <S : T> saveAll(entities: Iterable<S>): Flow<S>
+	fun <S : T> saveAll(entityStream: Flow<S>): Flow<S>
+	suspend fun findById(id: ID): T?
+	suspend fun existsById(id: ID): Boolean
+	fun findAll(): Flow<T>
+	fun findAllById(ids: Iterable<ID>): Flow<T>
+	fun findAllById(ids: Flow<ID>): Flow<T>
+	suspend fun count(): Long
+	suspend fun deleteById(id: ID)
+	suspend fun delete(entity: T)
+	suspend fun deleteAllById(ids: Iterable<ID>)
+	suspend fun deleteAll(entities: Iterable<T>)
+	suspend fun <S : T> deleteAll(entityStream: Flow<S>)
+	suspend fun deleteAll()
 }
 ```
-그렇기 때문에 위와 같이 처리를 하고 문제가 없다면 레코드 정보를 생성하는 방식으로 진행하는 것이 좋을 수 있다.
+위 코드를 보면 `suspend`가 붙은 경우와 아닌 경우를 볼 수 있다.
 
-## ManyToOne Relation
+이것은 반환되는 타입에 따라 달라지는데 컬렉션의 경우에는 `Flow`로 감싸는 것을 알 수 있다.
 
-레코드와 뮤지션의 관계는 `ManyToOne`의 관계이다.
+하지만 이것도 제공하는 `API`를 통해서 다루게 된다.
 
-`jpa`를 예로 들면 객체 그래프 탐색을 위해서 `양방향 매핑`을 선호할 수도 있다.
+# 차라리 새로 만든다는 느낌으로 시작하자.
 
-또는 정말 필요한 것이 아니라면 약간의 편의성을 포기하고 `@ManyToOne`단방향을 선호할 수 있다.
+기존 코드가 변경되면서 대부분의 코드에서 에러가 나기 때문에 차라리 새로 작성한다는 마음으로 시작하는게 좋다.
 
-이것 역시 정답은 없다.
+하지만 기존의 작업했던 디비에 쌓인 데이터를 통해서 먼저 `Read`쪽을 수정하도록 한다.
 
-개인적으로는 약간의 편의성을 포기하고 복잡성을 덜고 단방향을 선호하는 편이다.
-
-이 저장소에서도 이런 단방향을 위주로 설계할 생각이다.
-
-### Record entity 수정
-
-```kotlin
-@Table("record")
-@JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonIgnoreProperties(ignoreUnknown = true)
-class Record(
-    @Id
-    var id: Long? = null,
-    var musicianId: Long,
-    var title: String?,
-    var label: String?,
-    @Column("released_type")
-    var releasedType: ReleasedType?,
-    @Column("released_year")
-    var releasedYear: Int?,
-    var format: String?,
-    @Column("created_at")
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    var createdAt: LocalDateTime? = now(),
-    @Column("updated_at")
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    var updatedAt: LocalDateTime? = null,
-) {
-    @Transient
-    var musician: Musician? = null
-}
-```
-레코드는 뮤지션 아이디의 값을 가지고 있다.
-
-하지만 `JPA`처럼 할 수 없기 때문에 생성자가 아닌 바디에 위와 같이 `@Transient`를 설정한다.
-
-먼저 그냥 이것을 토대로 그냥 무작정 해보는 방법을 사용해 보자.
-
-### 1. UseCase에서 flatMapMany를 이용한 방법
-
-먼저 만들어 놓은 `ReadRecordUseCase`은 다음과 같다.
-
-```kotlin
-@Service
-class ReadRecordUseCase(
-    private val read: ReadRecordService,
-    private val readMusician: ReadMusicianService,
-) {
-
-    fun recordById(id: Long) = recordRepository.findById(id)
-    fun recordByIdOrThrow(id: Long, message: String? = null) = recordRepository.findByIdOrThrow(id, message)
-
-}
-
-``` 
-물론 뮤지션 아이디의 정보는 화면으로부터 정확하게 날아올 수 있을 것이다.
-
-하지만 좀 더 방어적인 코드를 짜보자면 `Write`에서 처럼 먼저 뮤지션의 정보를 가져온 이후 그에 따라 레코드 리스트를 가져온다고 해보자.
-
-```kotlin
-fun recordByMusicianId(musicianId: Long): Flux<Record> {
-    val musician = readMusician.musicianByIdOrThrow(musicianId)
-    return musician.flatMapMany { musician ->
-        read.recordByMusicianId(musicianId)
-            .map {
-                it.musician = musician
-                it
-            }
-    }
-}
-```
-그렇다면 존재하는 뮤지션이라면 이미 뮤지션의 정보를 알 수 있다.
-
-따라서 위와 같이 `flatMapMany`를 통해서 해당 뮤지션의 레코드 리스트를 가져오고 `map`을 통해 해당 뮤지션의 정보를 껴넣어 주는 방식을 고려해 볼 수 있다.
-
-지금은 페이징처리도 없긴 하지만 뮤지션 아이디로 레코드 리스트를 가져온다면 이 방법에서 더 이상 손을 대지 않아도 좋아 보인다.
-
-물론 최종적으로는 페이징처리를 해서 정보를 내려주는 방식이 가장 좋을 것이다.
-
-일단 위 코드부터 페이징 처리를 해보자.
-
-```kotlin
-interface RecordRepository: R2dbcRepository<Record, Long>, CustomRecordRepository {
-    override fun findById(id: Long): Mono<Record>
-    fun findByMusicianId(id: Long, pageable: Pageable): Flux<Record>
-    @Query("SELECT COUNT(id) FROM record WHERE musician_id = :musicianId")
-    fun countByMusicianId(@Param("musicianId") musicianId: Long): Mono<Long>
-}
-
-@Service
-class ReadRecordService(
-    private val recordRepository: RecordRepository,
-) {
-
-    fun recordById(id: Long) = recordRepository.findById(id)
-    fun recordByIdOrThrow(id: Long, message: String? = null) = recordRepository.findByIdOrThrow(id, message)
-    fun recordByMusicianId(musicianId: Long, pageable: Pageable) = recordRepository.findByMusicianId(musicianId, pageable)
-    fun recordCountByMusician(musicianId: Long) = recordRepository.countByMusicianId(musicianId)
-
-}
-```
-기존의 `findByMusicianId`에서 `Pageable`정보를 받고 그에 상응하는 카운트 쿼리도 추가한다.
-
-당연히 서비스쪽도 같이 변경한다.
-
-이미 기존에도 같은 코드를 사용했기 때문에 형식은 크게 벗어나지 않는다.
-```kotlin
-fun recordByMusicianId(queryPage: QueryPage, musicianId: Long): Mono<Page<Record>> {
-    val musician = readMusician.musicianByIdOrThrow(musicianId)
-    return musician.flatMapMany { musician ->
-        read.recordByMusicianId(musicianId, queryPage.fromPageable())
-            .map {
-                it.musician = musician
-                it
-            }
-    }
-    .collectList()
-    .zipWith(read.recordCountByMusician(musicianId))
-    .map { tuple -> PageImpl(tuple.t1, queryPage.fromPageable(), tuple.t2) }
-
-}
-```
-공통으로 페이지 처리를 위해 만든 `QueryPage`를 재활용하고 테스트를 해보면 원하는 결과를 얻을 수 있다.
-
-포스트맨의 경우에는 나의 테스트 데이타로 다음과 같은 결과를 얻을 수 있다.
-
-```
-GET 127.0.0.1:8080/api/v1/records/musician/10?page=1&size=10&column=releasedYear&sort=DESC
-발매 연도로 내림차순
-
-result
-{
-    "content": [
-        {
-            "id": 16,
-            "musicianId": 10,
-            "title": "Upgrade IV",
-            "label": "린치핀뮤직",
-            "releasedType": "FULL",
-            "releasedYear": 2020,
-            "format": "CD,LP,DIGITAL",
-            "createdAt": "2023-06-12T14:02:02",
-            "updatedAt": "2023-06-12T14:05:36",
-            "musician": {
-                "id": 10,
-                "name": "스윙스",
-                "genre": "HIPHOP",
-                "createdAt": "2023-06-05T19:28:31",
-                "updatedAt": "2023-06-05T19:34:20"
-            }
-        },
-        {
-            "id": 10,
-            "musicianId": 10,
-            "title": "Upgrade III",
-            "label": "린치핀뮤직",
-            "releasedType": "FULL",
-            "releasedYear": 2018,
-            "format": "CD",
-            "createdAt": "2023-06-12T10:42:23",
-            "musician": {
-                "id": 10,
-                "name": "스윙스",
-                "genre": "HIPHOP",
-                "createdAt": "2023-06-05T19:28:31",
-                "updatedAt": "2023-06-05T19:34:20"
-            }
-        },
-        {
-            "id": 9,
-            "musicianId": 10,
-            "title": "파급효과 (Ripple Effect)",
-            "label": "린치핀뮤직",
-            "releasedType": "COMPILATION",
-            "releasedYear": 2014,
-            "format": "COMPILATION",
-            "createdAt": "2023-06-12T10:42:23",
-            "musician": {
-                "id": 10,
-                "name": "스윙스",
-                "genre": "HIPHOP",
-                "createdAt": "2023-06-05T19:28:31",
-                "updatedAt": "2023-06-05T19:34:20"
-            }
-        }
-    ],
-    "pageable": {
-        "sort": {
-            "empty": false,
-            "unsorted": false,
-            "sorted": true
-        },
-        "offset": 0,
-        "pageNumber": 0,
-        "pageSize": 10,
-        "paged": true,
-        "unpaged": false
-    },
-    "last": true,
-    "totalPages": 1,
-    "totalElements": 3,
-    "first": true,
-    "size": 10,
-    "number": 0,
-    "sort": {
-        "empty": false,
-        "unsorted": false,
-        "sorted": true
-    },
-    "numberOfElements": 3,
-    "empty": false
-}
-```
-하지만 만일 레코드 리스트중에 뮤지션이 아닌 다른 조건의 검색을 통해 레코드 리스트를 가져오는 `API`라면 이 방식은 사용할 수 없다.
-
-이 때는 나머지 두 방법을 고려해 볼 수 있다.
-
-### 2. 네이티브 쿼리와 매퍼를 활용하는 방법
-
-`jpa`와 `queryDSL`의 조합처럼 가능하다면 얼마나 좋을까만은 어째든 `R2DBC`는 `ORM`이 아니기 때문에 다른 방식으로 처리해야 한다.
-
-그래서 확실히 손이 많이 가긴 하지만 현재는 이 방법이 가장 무난할 것이다.
-
-먼저 다음과 같이 어떤 조건도 없이 `musician`과 `record`테이블을 조인한다.
-
-```kotlin
-interface CustomRecordRepository {
-    fun updateRecord(record: Record, assignments: MutableMap<SqlIdentifier, Any>): Mono<Record>
-    fun findAllRecords(pageable: Pageable): Flux<Record>
-}
-
-@Component
-class RecordMapper: BiFunction<Row, RowMetadata, Record> {
-    override fun apply(row: Row, rowMetadata: RowMetadata): Record {
-        val musician = Musician(
-            name = row.get("musicianName", String::class.java)!!,
-            genre = Genre.valueOf(row.get("genre", String::class.java)!!),
-            createdAt = row.get("mCreatedAt", LocalDateTime::class.java),
-            updatedAt = row.get("mUpdatedAt", LocalDateTime::class.java),
-        )
-
-        val record = Record(
-            id = row.get("id", Long::class.javaObjectType)!!,
-            musicianId = row.get("musician_id", Long::class.javaObjectType)!!,
-            title = row.get("title", String::class.java),
-            label = row.get("label", String::class.java),
-            releasedType = ReleasedType.valueOf(row.get("released_type", String::class.java)!!),
-            releasedYear = row.get("released_year", Int::class.javaObjectType)!!,
-            format = row.get("id", String::class.java),
-            createdAt = row.get("created_at", LocalDateTime::class.java),
-            updatedAt = row.get("updated_at", LocalDateTime::class.java),
-        )
-        record.musician = musician
-        return record
-    }
-}
-
-class CustomRecordRepositoryImpl(
-    private val query: R2dbcEntityTemplate,
-    private val recordMapper: RecordMapper,
-): CustomRecordRepository {
-
-    override fun updateRecord(record: Record, assignments: MutableMap<SqlIdentifier, Any>): Mono<Record> {
-        return query.update(Record::class.java)
-                    .matching(query(where("id").`is`(record.id!!)))
-                    .apply(Update.from(assignments))
-                    .thenReturn(record)
-    }
-
-    override fun findAllRecords(pageable: Pageable): Flux<Record> {
-        val sql = """
-            SELECT m.name AS musicianName,
-                   m.genre,
-                   m.created_at AS mCreatedAt,
-                   m.updated_at AS mUpdatedAt,
-                   r.*
-              FROM record r
-              INNER JOIN musician m
-              ON r.musician_id = m.id 
-        """.trimIndent()
-        return query.databaseClient
-                    .sql(sql)
-                    .map(recordMapper::apply)
-                    .all()
-    }
-}
-```
-`RecordMapper`를 보면 좀 불편한 느낌이 가득하다.
-
-과거 `PrepareStatement`와 `ResultSet`을 이용한 방식과 상당히 유사하다.
-
-이런 코드는 스프링 내에서도 `JdbcTemplate`을 이용한 코드와도 상당히 유사하다.
-
-이 때 주의점은 `Long`, `Int`의 경우에는 `javaObjectType`로 타입을 설정해 줘야 오류가 발생하지 않는다.
-
-## Advanced All Records API
-
-이번 작업은 `R2DBC`가 초창기 등장했을 때 생각했었던 코드로 사실 프로덕트 단계에서는 사용하기 좀 애매하긴 하지만 기존의 뮤지션의 조건 검색을 따라해 볼 생각이다.
-
-먼저 다음과 같이 `reflect`를 활용해서 넘어온 컬럼 정보가 맞는지 확인하는 함수를 하나 정의한다.
-
-```kotlin
-fun getNativeColumn(columnName: String, clazz: KClass<*>): String {
-    val members = clazz.java.declaredFields
-    val annotationValues = members.mapNotNull { member ->
-        val list = member.annotations
-        val column = list.find { it.annotationClass == Column::class } as? Column
-        column?.value?.let { it }
-    }
-
-    val fieldValues = clazz.memberProperties.mapNotNull { it.name }
-    return if (annotationValues.contains(columnName)) {
-        columnName
-    } else if (fieldValues.contains(columnName)) {
-        toSnakeCaseByUnderscore(columnName)
-    } else {
-        throw BadParameterException("${columnName}이 존재하지 않습니다.")
-    }
-}
-
-fun toSnakeCaseByUnderscore(source: String): String {
-    return ParsingUtils.reconcatenateCamelCase(source, "_")
-}
-```
-물론 이 부분을 뮤지션 부분에서도 사용하기 위해서는 엔티티의 변수명과 비교하는 부분에서도 활용할 수 있지만 네이티브 쿼리의 경우에는 몇가지 검사를 해야 한다.
-
-먼저 리퀘스트로 넘어온 컬럼이 엔티티의 변수명과 같다면 `camel case by underscore`를 적용해 준다.
-
-만일 `@Column`에 정의된 컬럼명이면 그대로 반환해 주는 역할을 한다.
-
-```kotlin
-interface CustomRecordRepository {
-    fun updateRecord(record: Record, assignments: MutableMap<SqlIdentifier, Any>): Mono<Record>
-    fun findAllRecords(whereClause: String = "", orderClause: String = "", limitClause: String = ""): Flux<Record>
-}
-
-class CustomRecordRepositoryImpl(
-    private val query: R2dbcEntityTemplate,
-    private val recordMapper: RecordMapper,
-): CustomRecordRepository {
-
-    override fun updateRecord(record: Record, assignments: MutableMap<SqlIdentifier, Any>): Mono<Record> {
-        return query.update(Record::class.java)
-                    .matching(query(where("id").`is`(record.id!!)))
-                    .apply(Update.from(assignments))
-                    .thenReturn(record)
-    }
-
-    override fun findAllRecords(whereClause: String, orderClause: String, limitClause: String): Flux<Record> {
-        var sql = """
-            SELECT musician.name AS musicianName,
-                   musician.genre,
-                   musician.created_at AS mCreatedAt,
-                   musician.updated_at AS mUpdatedAt,
-                   record.*
-              FROM record
-              INNER JOIN musician
-              ON record.musician_id = musician.id
-              WHERE 1 = 1 
-              $whereClause
-              $orderClause
-              $limitClause
-        """.trimIndent()
-        return query.databaseClient
-                    .sql(sql)
-                    .map(recordMapper::apply)
-                    .all()
-    }
-}
-```
-커스텀 레파지토리에서 모든 정보를 받고 조합하는 방법도 고려해 볼 수 있지만 `useCase`에서 리퀘스트 정보를 분석해서 쿼리를 넘겨주는 방식을 탹햤다.
-
-앞서 정의한 `ConditionType`를 수정하자.
-
-```kotlin
-enum class ConditionType(
-    val code: String,
-    private val native: (String, WhereCondition) -> String,
-    private val criteria: (WhereCondition) -> Criteria
-) {
-    LTE("lte", { prefix, it -> "AND ${prefix}.${it.column} <= '${it.value}'" }, { where(it.column).lessThanOrEquals(it.value)}),
-    LT("lt", { prefix, it -> "AND ${prefix}.${it.column} < '${it.value}'" }, { where(it.column).lessThan(it.value)}),
-    GTE("gte", { prefix, it -> "AND ${prefix}.${it.column} >= '${it.value}'" }, { where(it.column).greaterThanOrEquals(it.value)}),
-    GT("gt", { prefix, it -> "AND ${prefix}.${it.column} > '${it.value}'" }, { where(it.column).greaterThan(it.value)}),
-    EQ("eq", { prefix, it -> "AND ${prefix}.${it.column} = '${it.value}'" }, { where(it.column).isEqual(it.value)}),
-    LIKE("like", { prefix, it -> "AND ${prefix}.${it.column} like '%${it.value}%'" }, { where(it.column).like("%${it.value}%")});
-
-    fun getCriteria(condition: WhereCondition): Criteria {
-        return criteria(condition)
-    }
-
-    fun getNativeSql(prefix: String, condition: WhereCondition): String {
-        return native(prefix, condition)
-    }
-
-    companion object {
-        /**
-         * null이면 EQ를 던진다.
-         * @param code
-         * @return ConditionType
-         */
-        fun of(code: String): ConditionType = values().firstOrNull { conditionType-> conditionType.code.equals(code, ignoreCase = true) }
-            ?: EQ
-    }
-
-}
-```
-또한 다음과 같이 `CritieraBuilder`에서도 리퀘스트 정보를 통해서 조건문과 페이징 소팅 관련 네이티브 쿼리 정보를 생성하는 함수도 추가한다.
-
-```kotlin
-fun createQuery(matrixVariable: MultiValueMap<String, Any>): Query {
-    if(matrixVariable.containsKey("all")) {
-        return empty()
-    }
-    val list = matrixVariable.map { (key, value) ->
-        try {
-            ConditionType.of(value[0].toString()).getCriteria(WhereCondition.from(key, value[1]))
-        } catch(e: Exception) {
-            throw BadParameterException("누락된 정보가 있습니다. 확인하세요.")
-        }
-    }
-    return query(Criteria.from(list))
-}
-
-fun createNativeWhereClause(prefix: String, clazz: KClass<*>, matrixVariable: MultiValueMap<String, Any>): String {
-    if(matrixVariable.containsKey("all")) {
-        return ""
-    }
-    val list = matrixVariable.map { (key, value) ->
-        try {
-            val validColumn = getNativeColumn(key, clazz)
-            ConditionType.of(value[0].toString()).getNativeSql(prefix, WhereCondition.from(validColumn, value[1]))
-        } catch(e: Exception) {
-            if (e is BadParameterException) {
-                throw BadParameterException(e.message)
-            } else {
-                throw BadParameterException("누락된 정보가 있습니다. 확인하세요.")
-            }
-        }
-    }
-    return list.joinToString(separator = "\n")
-}
-
-fun createNativeSortLimitClause(prefix: String, clazz: KClass<*>, queryPage: QueryPage): Pair<String, String> {
-    val nativeColumn = queryPage.column?.let { getNativeColumn(it, clazz) } ?: ""
-    val sort = if (nativeColumn.isNotBlank() && queryPage.sort != null) {
-        "ORDER BY ${prefix}.${nativeColumn} ${queryPage.sort.name}"
-    } else {
-        "ORDER BY ${prefix}.id"
-    }
-    val offset = ( queryPage.page!! - 1 ) * queryPage.size!!
-    val limit = "LIMIT ${queryPage.size} OFFSET $offset"
-    return sort to limit;
-}
-```
-
-
-```kotlin
-@Service
-class ReadRecordService(
-    private val recordRepository: RecordRepository,
-) {
-
-    fun recordById(id: Long) = recordRepository.findById(id)
-    fun recordByIdOrThrow(id: Long, message: String? = null) = recordRepository.findByIdOrThrow(id, message)
-    fun recordByMusicianId(musicianId: Long, pageable: Pageable) = recordRepository.findByMusicianId(musicianId, pageable)
-    fun recordCountByMusician(musicianId: Long) = recordRepository.countByMusicianId(musicianId)
-    fun allRecords(whereClause: String = "",
-                   orderClause: String = "",
-                   limitClause: String = "") = recordRepository.findAllRecords(whereClause, orderClause, limitClause)
-}
-
-@Service
-class ReadRecordUseCase(
-    private val read: ReadRecordService,
-    private val readMusician: ReadMusicianService,
-) {
-
-    fun recordById(id: Long): Mono<Record> {
-        return read.recordByIdOrThrow(id)
-    }
-
-    fun recordByMusicianId(queryPage: QueryPage, musicianId: Long): Mono<Page<Record>> {
-        val musician = readMusician.musicianByIdOrThrow(musicianId)
-        return musician.flatMapMany { musician ->
-            read.recordByMusicianId(musicianId, queryPage.fromPageable())
-                .map {
-                    it.musician = musician
-                    it
-                }
-        }
-            .collectList()
-            .zipWith(read.recordCountByMusician(musicianId))
-            .map { tuple -> PageImpl(tuple.t1, queryPage.fromPageable(), tuple.t2) }
-
-    }
-
-    fun allRecords(queryPage: QueryPage, matrixVariable: MultiValueMap<String, Any>): Flux<Record> {
-        val prefix = "record"
-        val clazz = Record::class
-        val whereClause = createNativeWhereClause(prefix, clazz, matrixVariable)
-        val (orderSql, limitSql) = createNativeSortLimitClause(prefix, clazz, queryPage)
-        return read.allRecords(whereClause = whereClause, orderClause = orderSql, limitClause = limitSql)
-    }
-
-}
-```
-`reflect`을 사용하는게 좀 걸리긴 하지만 나름대로 동적 쿼리를 작성하고자 했던 몸부림이라 생각하자.
-
-최종적으로 컨트롤러 부분은 뮤지션처럼 `@MatrixVariable`를 활용한다.
+# MusicianRepository 수정
 
 ```kotlin
 
-@Validated
-@RestController
-@RequestMapping("/api/v1/records")
-class RecordController(
-    private val readRecordUseCase: ReadRecordUseCase,
-    private val writeRecordUseCase: WriteRecordUseCase,
-) {
+// 기존 MusicianRepository
+interface MusicianRepository: R2dbcRepository<Musician, Long>, CustomMusicianRepository {
+    override fun findById(id: Long): Mono<Musician>
+    fun findAllBy(pageable: Pageable): Flux<Musician>
+}
 
-    @GetMapping("/{id}")
-    @ResponseStatus(HttpStatus.OK)
-    fun fetchRecord(@PathVariable("id") id: Long): Mono<Record> {
-        return readRecordUseCase.recordById(id)
-    }
-
-    @GetMapping("/query/{queryCondition}")
-    @ResponseStatus(HttpStatus.OK)
-    fun fetchRecord(
-        @Valid queryPage: QueryPage,
-        @MatrixVariable(pathVar = "queryCondition", required = false) matrixVariable: MultiValueMap<String, Any>
-    ): Flux<Record> {
-        return readRecordUseCase.allRecords(queryPage, matrixVariable)
-    }
-
-    @GetMapping("/musician/{musicianId}")
-    @ResponseStatus(HttpStatus.OK)
-    fun fetchRecordByMusician(@Valid queryPage: QueryPage, @PathVariable("musicianId") musicianId: Long): Mono<Page<Record>> {
-        return readRecordUseCase.recordByMusicianId(queryPage, musicianId)
-    }
-
-    @PostMapping("")
-    @ResponseStatus(HttpStatus.CREATED)
-    fun createRecord(@RequestBody @Valid command: CreateRecord): Mono<Record> {
-        return writeRecordUseCase.insert(command)
-    }
-
-    @PatchMapping("/{id}")
-    @ResponseStatus(HttpStatus.OK)
-    fun updateRecord(@PathVariable("id") id: Long, @RequestBody command: UpdateRecord): Mono<Record> {
-        return writeRecordUseCase.update(id, command)
-    }
-
+// 변경된 MusicianRepository
+interface MusicianRepository: BaseRepository<Musician, Long>, CustomMusicianRepository {
+    override suspend fun findById(id: Long): Musician?
+    fun findAllBy(pageable: Pageable): Flow<Musician>
 }
 ```
-물론 페이징 정보를 보내주는 것이 정확하겠지만 진행을 완료하게 되면 그 때 일괄적으로 적용해 볼까 한다.
+여기서 `Pageable`을 파라미터로 받는 `findAllBy`의 경우에는 `suspend`가 없고 `Flow`로 감싸진 것을 알 수 있다.
 
-포스트맨을 통해서 제대로 작동하는지 확인해 보자.
+내부적으로 이 경우에는 `suspend fun findAllBy(pageable: Pageable): List<Musician>`처럼 하게 되면 
 
 ```
-GET 127.0.0.1:8080/api/v1/records/query/where;all?page=1&size=20&column=musicianId&sort=DESC
-
-Query:["SELECT musician.name AS musicianName,
-       musician.genre,
-       musician.created_at AS mCreatedAt,
-       musician.updated_at AS mUpdatedAt,
-       record.*
-  FROM record
-  INNER JOIN musician
-  ON record.musician_id = musician.id
-  WHERE 1 = 1 
-  
-  ORDER BY record.musician_id DESC
-  LIMIT 20 OFFSET 0"
-
-[
-    {
-        "id": 9,
-        "musicianId": 10,
-        "title": "파급효과 (Ripple Effect)",
-        "label": "린치핀뮤직",
-        "releasedType": "COMPILATION",
-        "releasedYear": 2014,
-        "format": "CD,DIGITAL",
-        "createdAt": "2023-06-12T10:42:23",
-        "musician": {
-            "name": "스윙스",
-            "genre": "HIPHOP",
-            "createdAt": "2023-06-05T19:28:31",
-            "updatedAt": "2023-06-05T19:34:20"
-        }
-    },
-    {
-        "id": 10,
-        "musicianId": 10,
-        "title": "Upgrade III",
-        "label": "린치핀뮤직",
-        "releasedType": "FULL",
-        "releasedYear": 2018,
-        "format": "CD,DIGITAL",
-        "createdAt": "2023-06-12T10:42:23",
-        "musician": {
-            "name": "스윙스",
-            "genre": "HIPHOP",
-            "createdAt": "2023-06-05T19:28:31",
-            "updatedAt": "2023-06-05T19:34:20"
-        }
-    },
-    .
-    .
-]
-
-GET 127.0.0.1:8080/api/v1/records/query/where;label=eq,Impulse!?page=1&size=20
-
-Query:["SELECT musician.name AS musicianName,
-       musician.genre,
-       musician.created_at AS mCreatedAt,
-       musician.updated_at AS mUpdatedAt,
-       record.*
-  FROM record
-  INNER JOIN musician
-  ON record.musician_id = musician.id
-  WHERE 1 = 1 
-  AND record.label = 'Impulse!'
-  ORDER BY record.id
-  LIMIT 20 OFFSET 0
-
-[
-    {
-        "id": 4,
-        "musicianId": 2,
-        "title": "A Love Supreme",
-        "label": "Impulse!",
-        "releasedType": "FULL",
-        "releasedYear": 1964,
-        "format": "CD,LP",
-        "createdAt": "2023-06-12T10:34:48",
-        "musician": {
-            "name": "John Coltrane",
-            "genre": "JAZZ",
-            "createdAt": "2023-06-02T17:30:21"
-        }
-    },
-    {
-        "id": 8,
-        "musicianId": 9,
-        "title": "The Black Saint And The Sinner Lady",
-        "label": "Impulse!",
-        "releasedType": "FULL",
-        "releasedYear": 1963,
-        "format": "CD,LP",
-        "createdAt": "2023-06-12T10:38:22",
-        "musician": {
-            "name": "Charles Mingus",
-            "genre": "JAZZ",
-            "createdAt": "2023-06-04T19:54:00",
-            "updatedAt": "2023-06-04T19:57:15"
-        }
-    }
-]
+IllegalStateException: Method has to use a either 
+multi-item reactive wrapper return type or a wrapped Page/Slice type.
 ```
+위와 같은 에러가 난다. 
 
-물론 이런 복잡한 방식이 아니라 다음과 같이 조회 컬럼이 정해져 있다면
-```kotlin
-override fun findAllRecords(label: String, pageable: Pageable): Flux<Record> {
-        var sql = """
-            SELECT musician.name AS musicianName,
-                   musician.genre,
-                   musician.created_at AS mCreatedAt,
-                   musician.updated_at AS mUpdatedAt,
-                   record.*
-              FROM record
-              INNER JOIN musician
-              ON record.musician_id = musician.id
-              WHERE 1 = 1 
-              AND record.label = :label
-              LIMIT :limit OFFSET :offset
-        """.trimIndent()
-        return query.databaseClient
-                    .sql(sql)
-                    .bind("label")
-                    .bind("limit", pageable.getPageSize())
-                    .bind("offset", pageable.getOffset())
-                    .map(recordMapper::apply)
-                    .all()
-    }
-```
-이런 방식으로도 처리할 수도 있다.
+아마도 이런 방식으로 지원을 하지 않는 듯 싶다.
 
-### 3. @Query와 CustomConverter를 활용하는 방법
+이 때 리스트가 아닌 `Flow`로 감싸서 처리하면 된다.
 
-이 방법은 `@Query`를 이용하기 때문에 다이나믹한 방식에는 적합하지 않다.
-
-다만 특화된 케이스의 경우 활용하기 편하다.
-
-우선 다음과 같이 예제용으로 레파지토리에 함수를 하나 추가하자.
-
-```kotlin
-interface RecordRepository: R2dbcRepository<Record, Long>, CustomRecordRepository {
-    override fun findById(id: Long): Mono<Record>
-    fun findByMusicianId(id: Long, pageable: Pageable): Flux<Record>
-    @Query("SELECT COUNT(id) FROM record WHERE musician_id = :musicianId")
-    fun countByMusicianId(@Param("musicianId") musicianId: Long): Mono<Long>
-    @Query("""
-            SELECT musician.name AS musicianName,
-                   musician.genre,
-                   musician.created_at AS mCreatedAt,
-                   musician.updated_at AS mUpdatedAt,
-                   record.*
-              FROM record
-              INNER JOIN musician
-              ON record.musician_id = musician.id
-        """)
-    fun findRecords(): Flux<Record>
-}
-```
-현재는 조건이 없지만 조건이 있다면 기존 `countByMusicianId`함수처럼 파라미터를 받아서 바인딩하면 된다.
-
-다음과 같이 커스텀 컨버터를 만들자.
-
-`R2DBC`에서는 `@ReadingConverter`, `@WritingConverter`두개를 지원한다.
-
-보통 `@WritingConverter`의 경우에는 `insert/update`시 `@Query`를 이용해 네이티브 쿼리로 작업을 할 때 사용한다.
-
-예를 들면 뮤지션이나 레코드처럼 장르의 경우에는 `enum`으로 처리하고 있는데 이것을 `@WritingConverter`를 활용해서 따로 매핑을 해 줄 수 있다.
-
-그중에 우리는 `@ReadingConverter`를 활용한다.
-
-```kotlin
-@ReadingConverter
-class RecordReadConverter: Converter<Row, Record> {
-
-    override fun convert(row: Row): Record {
-        val musician = Musician(
-            name = row.get("musicianName", String::class.java)!!,
-            genre = Genre.valueOf(row.get("genre", String::class.java)!!),
-            createdAt = row.get("mCreatedAt", LocalDateTime::class.java),
-            updatedAt = row.get("mUpdatedAt", LocalDateTime::class.java),
-        )
-
-        val record = Record(
-            id = row.get("id", Long::class.javaObjectType)!!,
-            musicianId = row.get("musician_id", Long::class.javaObjectType)!!,
-            title = row.get("title", String::class.java),
-            label = row.get("label", String::class.java),
-            releasedType = ReleasedType.valueOf(row.get("released_type", String::class.java)!!),
-            releasedYear = row.get("released_year", Int::class.javaObjectType)!!,
-            format = row.get("format", String::class.java),
-            createdAt = row.get("created_at", LocalDateTime::class.java),
-            updatedAt = row.get("updated_at", LocalDateTime::class.java),
-        )
-        record.musician = musician
-        return record
-    }
-}
-```
-앞서 구현한 형태와는 크게 다르지 않다.
-
-다만 이 경우에는 `R2DBC`환경에서 만든 커스텀 컨버터를 사용할수 있도록 등록을 해줘야 한다.
-
-```kotlin
-@Configuration
-@EnableR2dbcAuditing
-class R2dbcConfiguration {
-
-    @Bean
-    fun r2dbcCustomConversions(databaseClient: DatabaseClient): R2dbcCustomConversions {
-        val dialect = DialectResolver.getDialect(databaseClient.connectionFactory)
-        val converters = ArrayList(dialect.converters)
-        converters.addAll(R2dbcCustomConversions.STORE_CONVERTERS)
-        return R2dbcCustomConversions(
-            CustomConversions.StoreConversions.of(dialect.simpleTypeHolder, converters),
-            getCustomConverters()!!
-        )
-    }
-
-    private fun getCustomConverters(): List<Any?>? {
-        return listOf<Any?>(RecordReadConverter())
-    }
-
-}
-```
-
-`WebFluxConfigurer`를 상속받아서 사용할 수 있지만 현재 우리는 스프링 부트에서 `application.yml`을 통해서 커넥션 설정을 하고 있다.
-
-하자만 `WebFluxConfigurer`를 사용하게 되면 불필요하게 `connectionFactory()`를 강제 구현해야 한다.
-
-사용자가 설정한 값이 `primary`로 등록되기 때문에 코틀린의 `TODO()`를 통해 그냥 놔둬도 되지만 위 코드와 같이 설정을 할 수 있다.
-
-그래서 `DatabaseClient`로부터 정보를 가져와서 처리하는 방식을 활용한다.
-
-만일 새로운 커스텀 컨버터를 생성하면 위 코드에서 추가해 주면 된다.
-
-하지만 이 방식은 별로 추찬하고 싶지 않다.
-
-왜냐하면 대부분의 `Repository`의 `API`에 사이드 이펙트가 발생할 수 있기 때문이다.
-
-이 프로젝트에서는 이 방식은 사용하지 않을 것이다.
-
-### OneToMany Relation
-`one-to-many`의 경우에는 몇 가지 문제가 잇다.
-
-그 중에 하나가 페이징 처리이다.
-
-실제로 `jpa`에서는 이 경우에는 기존과는 다른 방식을 사용해야 한다.
-
-곰곰히 생각해 보면 이는 당연한 결과이다.
-
-예를 들어 뮤지션과 레코드의 관계에서 뮤지션을 기준으로 레코드와 조인을 하게 되면 데이터가 뻥튀기가 된다.
-
-쉽게 사용하고자 한다면 `@EntityGraph`를 활용하는 것이다.
-
-물론 특정 뮤지션을 조건 검색으로 레코드를 가져온다면 가능하지만 그렇지 않다면 조인 이후 모든 정보를 조회해서 가져오게 된다.
-
-그리고 로그에는 메모리 관련 경고가 뜰 것이다.
-
-그래서 보통 `application.yml`에 전역 배치 사이즈를 설정하거나 해당 필드에 `@BatchSize`를 설정한다.
-
-`jpa`에서는 이렇게 설정하면 좀 독특하게 작동하는데 먼저 뮤지션을 페이징처리로 가져온다.
-
-그리고 리스트의 뮤지션 아이디값을 리스트로 묶어 레코드에서 `in`조건으로 가져온다.
-
-여기서는 예제로 특정 뮤지션을 조회할 때 음반도 같이 가져오도록 하는 `API`를 만들어 볼까 한다.
-
-```kotlin
-@Table("musician")
-@JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonIgnoreProperties(ignoreUnknown = true)
-class Musician(
-    @Id
-    var id: Long? = null,
-    var name: String,
-    var genre: Genre?,
-    @Column("created_at")
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    var createdAt: LocalDateTime? = now(),
-    @Column("updated_at")
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    var updatedAt: LocalDateTime? = null,
-) {
-    @Transient
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    var records: List<Record>? = null
-}
-```
-그리고 데모용으로 레파지토리에도 추가한다.
+기존의 만든 [CustomMusicianRepository](https://github.com/basquiat78/musicshop/blob/02-using-controller-record/src/main/kotlin/io/basquiat/musicshop/domain/musician/repository/custom/CustomMusicianRepository.kt)와 [CustomMusicianRepositoryImpl](https://github.com/basquiat78/musicshop/blob/02-using-controller-record/src/main/kotlin/io/basquiat/musicshop/domain/musician/repository/custom/impl/CustomMusicianRepositoryImpl.kt)도 변경하자.
 
 ```kotlin
 interface CustomMusicianRepository {
-    fun updateMusician(musician: Musician, assignments: MutableMap<SqlIdentifier, Any>): Mono<Musician>
-    fun musiciansByQuery(match: Query): Flux<Musician>
-    fun totalCountByQuery(match: Query): Mono<Long>
-
-    fun musicianWithRecord(id: Long): Mono<Musician>
+    suspend fun updateMusician(musician: Musician, assignments: MutableMap<SqlIdentifier, Any>): Musician
+    fun musiciansByQuery(match: Query): Flow<Musician>
+    suspend fun totalCountByQuery(match: Query): Long
+    suspend fun musicianWithRecords(id: Long): Musician?
 }
 
 class CustomMusicianRepositoryImpl(
     private val query: R2dbcEntityTemplate,
 ): CustomMusicianRepository {
 
-    override fun updateMusician(musician: Musician, assignments: MutableMap<SqlIdentifier, Any>): Mono<Musician> {
+    override suspend fun updateMusician(musician: Musician, assignments: MutableMap<SqlIdentifier, Any>): Musician {
         return query.update(Musician::class.java)
                     .matching(query(where("id").`is`(musician.id!!)))
                     .apply(Update.from(assignments))
                     .thenReturn(musician)
+                    .awaitSingle()
     }
 
-    override fun musiciansByQuery(match: Query): Flux<Musician> {
+    override fun musiciansByQuery(match: Query): Flow<Musician> {
         return query.select(Musician::class.java)
                     .matching(match)
-                    .all()
+                    .flow()
     }
 
-    override fun totalCountByQuery(match: Query): Mono<Long> {
+    override suspend fun totalCountByQuery(match: Query): Long {
         return query.select(Musician::class.java)
                     .matching(match)
                     .count()
+                    .awaitSingle()
     }
 
-    override fun musicianWithRecords(id: Long): Mono<Musician> {
+    override suspend fun musicianWithRecords(id: Long): Musician? {
         var sql = """
             SELECT musician.id,
                    musician.name,
@@ -1116,32 +254,451 @@ class CustomMusicianRepositoryImpl(
                         musician.records = records
                         musician
                     }
-                    .next()
+                    .awaitFirst()
+    }
+
+}
+
+```
+
+여기서도 마찬가지로 `suspend`를 붙여준다.
+
+이 때 각 쿼리 로직 이후 `awaitXXX`같은 함수를 통해서 무언가를 처리하고 있다.
+
+또한 `Flux`의 경우에는 `flow()`함수를 통해서 `Flow<T>`로 처리하는 것을 알 수 있다.
+
+이와 관련 `Wawit.kt`에서 해답을 찾을 수 있다.
+```kotlin
+public suspend fun <T> Publisher<T>.awaitFirst(): T = awaitOne(Mode.FIRST)
+public suspend fun <T> Publisher<T>.awaitFirstOrDefault(default: T): T = awaitOne(Mode.FIRST_OR_DEFAULT, default)
+public suspend fun <T> Publisher<T>.awaitFirstOrNull(): T? = awaitOne(Mode.FIRST_OR_DEFAULT)
+public suspend fun <T> Publisher<T>.awaitFirstOrElse(defaultValue: () -> T): T = awaitOne(Mode.FIRST_OR_DEFAULT) ?: defaultValue()
+public suspend fun <T> Publisher<T>.awaitLast(): T = awaitOne(Mode.LAST)
+public suspend fun <T> Publisher<T>.awaitSingle(): T = awaitOne(Mode.SINGLE)
+@Deprecated public suspend fun <T> Publisher<T>.awaitSingleOrDefault(default: T): T = awaitOne(Mode.SINGLE_OR_DEFAULT, default)
+@Deprecated public suspend fun <T> Publisher<T>.awaitSingleOrNull(): T? = awaitOne(Mode.SINGLE_OR_DEFAULT)
+@Deprecated public suspend fun <T> Publisher<T>.awaitSingleOrElse(defaultValue: () -> T): T = awaitOne(Mode.SINGLE_OR_DEFAULT) ?: defaultValue()
+// more private fun
+```
+`Publisher<T>`로 부터 `T`객체를 얻는 방식이 마치 코루틴 빌더 `async`와 유사하다.
+
+즉 발행자인 `Mono`, `Flux`로부터 비동기적으로 객체를 가져온다고 생각하면 쉽다.
+
+해당 코드를 따라가다보면 `suspendCancellableCoroutine`를 활용하고 있는데 방식은 `pub/sub`방식으로 처리하고 있는 것을 알 수 있다.
+
+결국 마치 `jpa`나 `queryDSL`처럼 쿼리 이후 가져오는 타입에 따라 `fetch`, `fetchOne`처럼 사용하고 있기 때문에 크게 어려움이 없다.
+
+이제는 서비스 레이어의 코드를 수정해 보자.
+
+# ReadMusicianService 수정
+
+```kotlin
+@Service
+class ReadMusicianService(
+    private val musicianRepository: MusicianRepository,
+) {
+    fun musicians(pageable: Pageable) = musicianRepository.findAllBy(pageable)
+    suspend fun musicianById(id: Long) = musicianRepository.findById(id)
+    suspend fun musicianByIdOrThrow(id: Long, message: String? = null) = musicianRepository.findByIdOrThrow(id, message)
+    suspend fun totalCount() = musicianRepository.count()
+    fun musiciansByQuery(match: Query) = musicianRepository.musiciansByQuery(match)
+    suspend fun totalCountByQuery(match: Query) = musicianRepository.totalCountByQuery(match)
+    suspend fun musicianWithRecords(id: Long) = musicianRepository.musicianWithRecords(id)
+}
+```
+기존과의 차이점은 `suspend`가 붙는 다는 점과 `Mono`나 `Flux`아 아닌 객체를 다룰 수 있게 된다는 점이다.
+
+다만 `Pageable`을 사용한 `findAllBy(pageable: Pageable)`함수의 경우에는 `Flow<T>`로 받는다.
+
+이때는 `suspend`가 붙지 않아도 된다.
+
+여기서 `toList()`를 통해 `Iterable<T>`형식으로 변환이 가능하지만 `domain`패키지의 경우에는 이대로 사용한다.
+
+`useCase`작성시 `toList()`로 처리할지 또는 그냥 `Flow<T>`로 컨트롤러를 통해 클라이언트로 보내줄지 결정하도록 하자.    
+
+이제부터 이것이 잘 작동하는지 테스트 코드를 작성해 보자.
+
+앞서 우리는 이 테스트를 위해서 그레이들에 `testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")`을 설정했다.
+
+최신 버전은 이 `README.md`이 작성된 시점에 `1.7.1`버전이 최신 버전이다.
+
+여기서 제공하는 `runTest{}`을 통해서 테스팅을 진행한다.
+
+```kotlin
+@SpringBootTest
+class ReadMusicianServiceTest @Autowired constructor(
+    private val read: ReadMusicianService,
+) {
+
+    @Test
+    @DisplayName("fetch musician by id")
+    fun musicianByIdTEST() = runTest{
+        // given
+        val id = 1L
+
+        // when
+        val selected = read.musicianById(id)
+
+        // then
+        assertThat(selected!!.name).isEqualTo("Charlie Parker")
+    }
+
+    @Test
+    @DisplayName("fetch musician by id or throw")
+    fun musicianByIdOrThrowTEST() = runTest{
+        // given
+        //val id = 1L
+        val id = 1111L
+
+        // when
+        val selected = read.musicianByIdOrThrow(id)
+
+        // then
+        assertThat(selected!!.name).isEqualTo("Charlie Parker")
+
+    }
+
+    @Test
+    @DisplayName("fetch musicians pagination")
+    fun musiciansTEST() = runTest{
+        // given
+        val pageable = PageRequest.of(0, 3)
+
+        // when
+        val musicians = read.musicians(pageable)
+                            .toList()
+                            .map { it.name }
+        // then
+        assertThat(musicians.size).isEqualTo(3)
+        assertThat(musicians[0]).isEqualTo("Charlie Parker")
+    }
+
+    @Test
+    @DisplayName("total musician count test")
+    fun totalCountTEST() = runTest{
+        // when
+        val count = read.totalCount()
+
+        // then
+        assertThat(count).isEqualTo(10)
+    }
+
+    @Test
+    @DisplayName("musicians list by query test")
+    fun musiciansByQueryTEST() = runTest{
+
+        val list = emptyList<Criteria>()
+
+        // given
+        val match = query(Criteria.from(list)).limit(2).offset(0)
+
+        // when
+        val musicians: List<String> = read.musiciansByQuery(match)
+                                          .toList()
+                                          .map { it.name }
+
+        // then
+        assertThat(musicians.size).isEqualTo(2)
+
+    }
+
+    @Test
+    @DisplayName("total musician count by query test")
+    fun totalCountByQueryTEST() = runTest{
+        // given
+        val match = query(where("genre").isEqual("JAZZ"))
+
+        // when
+        val count = read.totalCountByQuery(match)
+
+        // then
+        assertThat(count).isEqualTo(4)
+    }
+
+    @Test
+    @DisplayName("musician with records test")
+    fun musicianWithRecordsTEST() = runTest{
+        // given
+        val id = 10L
+
+        // when
+        val musician = read.musicianWithRecords(id) ?: notFound()
+
+        // then
+        assertThat(musician.name).isEqualTo("스윙스")
+        assertThat(musician.records!!.size).isEqualTo(5)
+
+    }
+
+}
+
+```
+마치 일반 `Web MVC`을 사용할 때와 크게 다르지 않다는 것을 눈치챘을 것이다.
+
+이제는 이것을 기반으로 `useCase`를 작성해 보자.
+
+# ReadMusicianUseCase 수정
+
+이제부터는 대충 느낌이 올것이다.
+
+```kotlin
+@Service
+class ReadMusicianUseCase(
+    private val read: ReadMusicianService,
+) {
+
+    fun musicianById(id: Long): Mono<Musician> {
+        return read.musicianByIdOrThrow(id)
+    }
+
+    fun musiciansByQuery(queryPage: QueryPage, matrixVariable: MultiValueMap<String, Any>): Mono<Page<Musician>> {
+        val match = createQuery(matrixVariable)
+        return read.musiciansByQuery(queryPage.pagination(match))
+                   .collectList()
+                   .zipWith(read.totalCountByQuery(match))
+                   .map { tuple -> PageImpl(tuple.t1, queryPage.fromPageable(), tuple.t2) }
     }
 
 }
 ```
-일단 코드가 너무 복잡한다.
+위 기존의 코드를 바꿔보도록 하자.
 
-`bufferUntilChanged`를 통해서 뮤지션 아이디로 `row`정보를 그룹핑하고 `map`부분을 매퍼로 정의해서 처리하면 깔끔해 질것이다.
+하지만 `musiciansByQuery`에서 사용하고 있는 `zipWith`는 `Mono`에서 제공하는 `API`로 일반적인 코틀린의 컬렉션 함수에서는 존재하지 않는다.
 
-이 경우에는 페이징 처리를 하는데 무리가 없다.
+게다가 코틀린의 컬렉션 함수나 자바의 `Stream API`에서 제공하는 `zip`나 `zipWithNext`는 `zipWith`와는 작동 방식이 다르다.
 
-하지만 이런 방식이라면 차라리 `record`에서 `many-to-one`으로 처리하는게 좀 더 나아보인다.
+우리는 이것을 이런 방식으로 처리하고 싶은 욕망이 생긴다.
+
+따라서 확장 함수를 통해서 이것을 정의해서 사용하자.
+
+이 방식에 특화된 커스텀 확장 함수를 하나 작성하자.
+
+`CustomExtensions.kt`
+```kotlin
+fun <T, R> Iterable<T>.countZipWith(other: R): Pair<Iterable<T>, R> {
+    return this to other
+}
+
+fun <T, R, S> Pair<Iterable<T>, R>.map(transformer: (Pair<Iterable<T>, R>) -> S): S {
+    return transformer(this)
+}
+```
+`countZipWith`는 페이징 처리를 위해서는 리스트 정보와 전체 카운트 정보를 통해 처리하고 자 할 테니 `Pair`로 반환한다.
+
+따라서 `Pair`에 대해 확장 함수도 같이 작성을 해줘야 한다.
+
+아래는 이것을 적용한 최종 `ReadMusicianUseCase`이다.
+
+```kotlin
+@Service
+class ReadMusicianUseCase(
+    private val read: ReadMusicianService,
+) {
+
+    suspend fun musicianById(id: Long): Musician {
+        return read.musicianByIdOrThrow(id)
+    }
+
+    suspend fun musiciansByQuery(queryPage: QueryPage, matrixVariable: MultiValueMap<String, Any>): Page<Musician> {
+        val match = createQuery(matrixVariable)
+        return read.musiciansByQuery(queryPage.pagination(match))
+                   .toList()
+                   .countZipWith(read.totalCountByQuery(match))
+                   .map { ( musicians, count) -> PageImpl(musicians.toList(), queryPage.fromPageable(), count)}
+    }
+
+}
+```
+테스트 코드는 기존과 크게 다르지 않기 때문에 완료된 테스트 코드는 확인해 보면 될 듯 싶다.
+
+# WriteMusicianService 수정
+
+```kotlin
+@Service
+class WriteMusicianService(
+    private val musicianRepository: MusicianRepository,
+) {
+    fun create(musician: Musician): Mono<Musician> {
+        return musicianRepository.save(musician)
+    }
+    fun update(musician: Musician, assignments: MutableMap<SqlIdentifier, Any>): Mono<Musician> {
+        return musicianRepository.updateMusician(musician, assignments)
+    }
+}
+```
+이제는 너무 익숙해지기 시작한다.
+
+```kotlin
+@Service
+class WriteMusicianService(
+    private val musicianRepository: MusicianRepository,
+) {
+    suspend fun create(musician: Musician): Musician {
+        return musicianRepository.save(musician)
+    }
+    suspend fun update(musician: Musician, assignments: MutableMap<SqlIdentifier, Any>): Musician {
+        return musicianRepository.updateMusician(musician, assignments)
+    }
+}
+```
+당연히 우리는 테스트 코드를 수행해야 한다.
+
+이 때 `rollBack`은 기존의 코드를 좀 수정해야 한다.
+
+```kotlin
+@Component
+class Transaction (
+    transactionalOperator: TransactionalOperator
+) {
+    init {
+        Companion.transactionalOperator = transactionalOperator
+    }
+    companion object {
+        lateinit var transactionalOperator: TransactionalOperator
+        suspend fun <T, S> withRollback(value: T, receiver: suspend (T) -> S): S {
+            return transactionalOperator.executeAndAwait {
+                it.setRollbackOnly()
+                receiver(value)
+            }
+        }
+
+        suspend fun withRollback(receiver: suspend () -> Unit) {
+            return transactionalOperator.executeAndAwait {
+                it.setRollbackOnly()
+                receiver()
+            }
+        }
+    }
+}
+```
+이것을 이용해 롤백 테스트를 진행하자.
+
+```kotlin
+@SpringBootTest
+class WriteMusicianServiceTest @Autowired constructor(
+    private val read: ReadMusicianService,
+    private val write: WriteMusicianService,
+) {
+
+    @Test
+    @DisplayName("musician create test")
+    fun createMusicianTEST() = runTest {
+        // given
+        val createdMusician = Musician(name = "taasaaa", genre = Genre.HIPHOP)
+        
+        // when
+        val musician = Transaction.withRollback(createdMusician) { 
+            write.create(it) 
+        }
+        
+        // then
+        assertThat(musician.id).isGreaterThan(0)
+    }
+
+    @Test
+    @DisplayName("musician update using builder test")
+    fun updateMusicianTEST() = runTest {
+        // given
+        val id = 1L
+        
+        val command = UpdateMusician(name = "Charlie Parker", genre = "POP")
+        
+        val target = read.musicianByIdOrThrow(1)
+        
+        val (musician, assignments) = command.createAssignments(target)
+        
+        // when
+        val update = Transaction.withRollback(id) {
+            write.update(musician, assignments)
+            read.musicianById(id)!!
+        }
+        
+        // then
+        assertThat(update.genre).isEqualTo(Genre.POP)
+    }
+
+}
+```
+
+# WriteMusicianUseCase 수정 및 MusicianController 완성
+
+```kotlin
+@Service
+class WriteMusicianUseCase(
+    private val read: ReadMusicianService,
+    private val write: WriteMusicianService,
+) {
+
+    suspend fun insert(command: CreateMusician): Musician {
+        val created = Musician(name = command.name, genre = Genre.valueOf(command.genre))
+        return write.create(created)
+    }
+
+    suspend fun update(id: Long, command: UpdateMusician): Musician {
+        val selected = read.musicianByIdOrThrow(id)
+        val (musician, assignments) = command.createAssignments(selected)
+        write.update(musician, assignments)
+        return read.musicianById(id)!!
+    }
+
+}
+
+@RestController
+@RequestMapping("/api/v1/musicians")
+class MusicianController(
+    private val readMusicianUseCase: ReadMusicianUseCase,
+    private val writeMusicianUseCase: WriteMusicianUseCase,
+) {
+
+    @GetMapping("/query/{queryCondition}")
+    @ResponseStatus(HttpStatus.OK)
+    suspend fun fetchMusicians(
+        @Valid queryPage: QueryPage,
+        @MatrixVariable(pathVar = "queryCondition", required = false) matrixVariable: MultiValueMap<String, Any>
+    ): Page<Musician> {
+        return readMusicianUseCase.musiciansByQuery(queryPage, matrixVariable)
+    }
+
+    @GetMapping("/{id}")
+    @ResponseStatus(HttpStatus.OK)
+    suspend fun fetchMusician(@PathVariable("id") id: Long): Musician {
+        return readMusicianUseCase.musicianById(id)
+    }
+
+    @PostMapping("")
+    @ResponseStatus(HttpStatus.CREATED)
+    suspend fun createMusician(@RequestBody @Valid command: CreateMusician): Musician {
+        return writeMusicianUseCase.insert(command)
+    }
+
+    @PatchMapping("/{id}")
+    @ResponseStatus(HttpStatus.OK)
+    suspend fun updateMusician(@PathVariable("id") id: Long, @RequestBody command: UpdateMusician): Musician {
+        return writeMusicianUseCase.update(id, command)
+    }
+
+}
+```
+테스트 코드는 전부 완료했으니 확인을 하면 될 것이다.
+
+# Record 관련 수정 작업
+
+아마도 똑같은 설명을 반복하게 될 것이다.
+
+완성된 코드와 테스트 코드를 살펴보면 될것이라는 한줄로 마무리할까 한다.
 
 # At a Glance
-이 방법을 사용한게 몇 년전이다.
 
-그러다보니 이 프로젝트는 좀 지지부진한 감이 없지 않아 있다.
+자바하시는 분들에게는 미안하지만 이런 이점을 누릴 수는 없다.
 
-게다가 `jooQ`에서는 이와 관련 자체적으로 `R2DBC`를 지원하고 있는데 `queryDsl`는 그렇지 않다.
+어째든 코틀린의 코루틴을 활용하는 이 방식은 `WebFlux`을 접하는데 상당한 이점을 제공한다.
 
-그런데 `queryDsl`공식 사이트의 `Related projects`항목의 `Extensions`에 흥미로운 게 하나 있다.
+기존의 방식을 그대로 누릴 수 있기 때문이다.
 
-여기에 `infobip-spring-data-querydsl`프로젝트 링크가 있어서 사용해 본 경험이 있는데 사실 이대로 사용하기에는 설정을 해야하는게 많다.
+다음은 마지막으로 `functional endpoints`를 이용한 방식을 다루고자 한다.
 
-어째든 이 프로젝트와 관련해서 이 라이브러리를 사용하며 고통받앗던 경험을 살려서 한번 최종적으로 사용한 브랜치도 소개해 볼까 한다.
+이미 지금까지 잘 따라오신 분들이라면 이 방식 역시 크게 다르지 않을 것이다.
 
-기회가 되면 `jooQ`와 연계된 프로젝트도 진행해 볼까 한다.
+다만 `FunctionRouter`에서 살짝 변경될 것인데 이마저도 바꿀 게 없다.
 
-그 다음은 `functional endpoints`로 변경해 보고자 한다.
+그 내용은 다음 브랜치에서 확인해 보자.

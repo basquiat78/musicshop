@@ -2,7 +2,6 @@ package io.basquiat.musicshop.api.controller
 
 import io.basquiat.musicshop.api.usecase.musician.model.CreateMusician
 import io.basquiat.musicshop.api.usecase.musician.model.UpdateMusician
-import io.basquiat.musicshop.domain.musician.model.code.Genre
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -22,7 +21,7 @@ class MusicianControllerTest @Autowired constructor(
 	@DisplayName("musician create test")
 	fun createMusicianTEST() {
 		// given
-		val createMusician = CreateMusician(name = "스윙스", genre = Genre.JAZZ)
+		val createMusician = CreateMusician(name = "Coleman Hawkins", genre = "HIPHOP")
 
 		// when
 		webTestClient.post()
@@ -35,18 +34,18 @@ class MusicianControllerTest @Autowired constructor(
 					 .expectHeader().contentType(MediaType.APPLICATION_JSON)
 					 .expectBody()
 					 // then
-					 .jsonPath("$.name").isEqualTo("스윙스")
+					 .jsonPath("$.name").isEqualTo("Coleman Hawkins")
 	}
 
 	@Test
 	@DisplayName("musician update test")
 	fun updateMusicianTEST() {
 		// given
-		val update = UpdateMusician(name = null, genre = Genre.HIPHOP)
+		val update = UpdateMusician(genre = "JAZZ")
 
 		// when
 		webTestClient.patch()
-					 .uri("/api/v1/musicians/10")
+					 .uri("/api/v1/musicians/25")
 					 .contentType(MediaType.APPLICATION_JSON)
 					 .accept(MediaType.APPLICATION_JSON)
 					 .body(Mono.just(update), UpdateMusician::class.java)
@@ -55,7 +54,7 @@ class MusicianControllerTest @Autowired constructor(
 					 .expectHeader().contentType(MediaType.APPLICATION_JSON)
 					 .expectBody()
 					 // then
-					 .jsonPath("$.genre").isEqualTo("HIPHOP")
+					 .jsonPath("$.genre").isEqualTo("JAZZ")
 	}
 
 	@Test
@@ -77,27 +76,6 @@ class MusicianControllerTest @Autowired constructor(
 
 	}
 
-//	@Test
-//	@DisplayName("fetchMusicians test")
-//	fun fetchMusiciansTEST() {
-//
-//		// given
-//		val page = 1
-//		val size = 10
-//
-//		// when
-//		webTestClient.get()
-//					 .uri("/api/v1/musicians?page=$page&size=$size")
-//					 .accept(MediaType.APPLICATION_JSON)
-//					 .exchange()
-//					 .expectStatus().isOk
-//					 .expectHeader().contentType(MediaType.APPLICATION_JSON)
-//					 .expectBody()
-//					 // then
-//					 .jsonPath("$.last").isEqualTo(true) // row5 -> last is true
-//
-//	}
-
 	@Test
 	@DisplayName("fetchMusicians adjust Matrix Variable test")
 	fun fetchMusiciansTEST() {
@@ -108,14 +86,14 @@ class MusicianControllerTest @Autowired constructor(
 
 		// when
 		webTestClient.get()
-					 .uri("/api/v1/musicians/query/search;name=like,윙스?page=$page&size=$size")
+					 .uri("/api/v1/musicians/query/search;name=like,lest?page=$page&size=$size")
 					 .accept(MediaType.APPLICATION_JSON)
 					 .exchange()
 					 .expectStatus().isOk
 					 .expectHeader().contentType(MediaType.APPLICATION_JSON)
 					 .expectBody()
 					 // then
-					 .jsonPath("$.content[0].name").isEqualTo("스윙스")
+					 .jsonPath("$.content[0].name").isEqualTo("Lester Young")
 
 	}
 

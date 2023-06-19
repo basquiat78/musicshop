@@ -1,12 +1,13 @@
 package io.basquiat.musicshop.domain.record.service
 
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runTest
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.data.domain.PageRequest
-import reactor.test.StepVerifier
 
 @SpringBootTest
 class ReadRecordServiceTest @Autowired constructor(
@@ -15,42 +16,36 @@ class ReadRecordServiceTest @Autowired constructor(
 
 	@Test
 	@DisplayName("record by id test")
-	fun recordByIdTEST() {
+	fun recordByIdTEST() = runTest {
 		// given
-		//val id = 2L
 		val id = 1L
 
 		// when
-		val mono = read.recordByIdOrThrow(id)
+		val record = read.recordByIdOrThrow(id)
 
 		// then
-		mono.`as`(StepVerifier::create)
-			.assertNext {
-				assertThat(it.title).isEqualTo("Now's The Time")
-			}
-			.verifyComplete()
+		assertThat(record.title).isEqualTo("Now's The Time")
 	}
 
 	@Test
 	@DisplayName("record by musician id test")
-	fun recordByMusicianIdTEST() {
+	fun recordByMusicianIdTEST() = runTest {
 		// given
-		//val id = 2L
 		val musicianId = 1L
 
 		// when
-		val flux = read.recordByMusicianId(musicianId, PageRequest.of(0, 1))
-									.map { it.title }
+		val titles = read.recordByMusicianId(musicianId, PageRequest.of(0, 10))
+									 .toList()
+									 .map { it.title }
 
 		// then
-		flux.`as`(StepVerifier::create)
-			.expectNext("Now's The Time")
-			.verifyComplete()
+		assertThat(titles.size).isEqualTo(2)
+		assertThat(titles[0]).isEqualTo("Now's The Time")
 	}
 
 	@Test
 	@DisplayName("record Count by musician Count test")
-	fun recordByMusicianCountTEST() {
+	fun recordByMusicianCountTEST() = runTest {
 		// given
 		//val id = 2L
 		val musicianId = 10L
@@ -59,23 +54,39 @@ class ReadRecordServiceTest @Autowired constructor(
 		val count = read.recordCountByMusician(musicianId)
 
 		// then
-		count.`as`(StepVerifier::create)
-			 .expectNext(3)
-			 .verifyComplete()
+		assertThat(count).isEqualTo(5)
 	}
 
 	@Test
-	@DisplayName("records by converter test")
-	fun recordsTEST() {
+	@DisplayName("allRecords test")
+	fun allRecordsTEST() = runTest {
+		// given
+		val whereClause = "AND record.musician_id = 10"
+		val orderClause = "ORDER BY record.released_year DESC"
+		val limitClause = "LIMIT 10"
+
+		// when
+		val recordTitle = read.allRecords(whereClause, orderClause, limitClause)
+									  .toList()
+									  .map { it.title }
+									  .first()
+
+		// then
+		assertThat(recordTitle).isEqualTo("Upgrade IV")
+	}
+
+	@Test
+	@DisplayName("records test")
+	fun recordsTEST() = runTest {
 		// given
 
 		// when
-		val flux = read.records().map { it.musician?.name }.take(1)
-
+		val recordTitle = read.records()
+									  .toList()
+									  .map { it.title }
+									  .first()
 		// then
-		flux.`as`(StepVerifier::create)
-			.expectNext("Charlie Parker")
-			.verifyComplete()
+		assertThat(recordTitle).isEqualTo("Now's The Time")
 	}
 
 }

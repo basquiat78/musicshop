@@ -1,5 +1,6 @@
 package io.basquiat.musicshop.common.model.request
 
+import io.basquiat.musicshop.common.constraint.EnumCheck
 import jakarta.validation.constraints.Min
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
@@ -11,7 +12,8 @@ data class QueryPage(
     @field:Min(1, message = "사이즈 정보는 0보다 커야 합니다.")
     val size: Int? = 10,
     val column: String? = null,
-    val sort: Sort.Direction? = null,
+    @field:EnumCheck(enumClazz = Sort.Direction::class, permitNull = true, message = "sort 필드는 DESC, ASC 만 가능합니다.")
+    val sort: String? = null,
 ) {
     private val offset : Int
         get() = this.page!! - 1
@@ -23,15 +25,15 @@ data class QueryPage(
         get() = this.page!!
 
     fun fromPageable(): PageRequest {
-        val sort = if (column != null && sort != null) Sort.by(sort, column) else Sort.unsorted()
-        return PageRequest.of(offset, limit, sort)
+        val sorted = if (column != null && sort != null) Sort.by(Sort.Direction.valueOf(sort.uppercase()), column) else Sort.unsorted()
+        return PageRequest.of(offset, limit, sorted)
     }
 
     fun pagination(match: Query): Query {
-        val sort = if (column != null && sort != null) Sort.by(sort, column) else Sort.unsorted()
+        val sorted = if (column != null && sort != null) Sort.by(Sort.Direction.valueOf(sort.uppercase()), column) else Sort.unsorted()
         return match.offset(offset.toLong())
-                    .limit(limit)
-                    .sort(sort)
+            .limit(limit)
+            .sort(sorted)
     }
 
 }

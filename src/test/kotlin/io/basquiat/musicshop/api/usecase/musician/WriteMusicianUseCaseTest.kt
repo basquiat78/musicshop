@@ -4,6 +4,7 @@ import io.basquiat.musicshop.api.usecase.musician.model.CreateMusician
 import io.basquiat.musicshop.api.usecase.musician.model.UpdateMusician
 import io.basquiat.musicshop.domain.musician.model.code.Genre
 import io.basquiat.musicshop.domain.musician.service.ReadMusicianService
+import kotlinx.coroutines.test.runTest
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -11,7 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.TestExecutionListeners
 import org.springframework.test.context.transaction.TransactionalTestExecutionListener
-import reactor.test.StepVerifier
 
 @SpringBootTest
 @TestExecutionListeners(
@@ -25,36 +25,30 @@ class WriteMusicianUseCaseTest @Autowired constructor(
 
 	@Test
 	@DisplayName("musician insert useCase test")
-	fun insertUseCaseTEST() {
+	fun insertUseCaseTEST() = runTest {
 		// given
-		val command = CreateMusician(name = "Charlie Mingus", genre = Genre.JAZZ)
+		val command = CreateMusician(name = "Lester Young", genre = Genre.ETC.name)
 
 		// when
-		val mono = writeUseCase.insert(command)
+		val musician = writeUseCase.insert(command)
+
 		// then
-		mono.`as`(StepVerifier::create)
-			.assertNext {
-				assertThat(it.genre).isEqualTo(Genre.JAZZ)
-			}
-			.verifyComplete()
+		assertThat(musician.genre).isEqualTo(Genre.JAZZ)
 	}
 
 	@Test
 	@DisplayName("musician update useCase test")
-	fun updateUseCaseTEST() {
+	fun updateUseCaseTEST() = runTest {
 		// given
-		val id = 9L
-		val command = UpdateMusician(name = "Charles Mingus", genre = null)
+		val id = 24L
+		val command = UpdateMusician(genre = Genre.JAZZ.name)
 
 		// when
-		val mono = writeUseCase.update(id, command)
+		writeUseCase.update(id, command)
 
 		// then
-		mono.`as`(StepVerifier::create)
-			.assertNext {
-				assertThat(it.name).isEqualTo(command.name)
-			}
-			.verifyComplete()
+		val update = readMusicianService.musicianById(id)!!
+		assertThat(update.genre).isEqualTo(Genre.JAZZ)
 	}
 
 }

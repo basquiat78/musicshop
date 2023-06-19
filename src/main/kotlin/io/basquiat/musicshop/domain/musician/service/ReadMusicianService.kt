@@ -11,11 +11,11 @@ class ReadMusicianService(
     private val musicianRepository: MusicianRepository,
 ) {
     fun musicians(pageable: Pageable) = musicianRepository.findAllBy(pageable)
-    fun musicianById(id: Long) = musicianRepository.findById(id)
-    fun musicianByIdOrThrow(id: Long, message: String? = null) = musicianRepository.findByIdOrThrow(id, message)
-    fun totalCount() = musicianRepository.count()
     fun musiciansByQuery(match: Query) = musicianRepository.musiciansByQuery(match)
-    fun totalCountByQuery(match: Query) = musicianRepository.totalCountByQuery(match)
 
-    fun musicianWithRecords(id: Long) = musicianRepository.musicianWithRecords(id)
+    suspend fun musicianById(id: Long) = musicianRepository.findById(id)
+    suspend fun musicianByIdOrThrow(id: Long, message: String? = null) = musicianRepository.findByIdOrThrow(id, message)
+    suspend fun totalCount() = musicianRepository.count()
+    suspend fun totalCountByQuery(match: Query) = musicianRepository.totalCountByQuery(match)
+    suspend fun musicianWithRecords(id: Long) = musicianRepository.musicianWithRecords(id)
 }
