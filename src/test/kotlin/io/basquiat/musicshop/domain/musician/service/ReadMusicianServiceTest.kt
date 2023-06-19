@@ -1,16 +1,18 @@
 package io.basquiat.musicshop.domain.musician.service
 
+import io.basquiat.musicshop.common.utils.notFound
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runTest
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.data.domain.PageRequest
 import org.springframework.data.relational.core.query.Criteria
 import org.springframework.data.relational.core.query.Criteria.where
 import org.springframework.data.relational.core.query.Query.query
-import reactor.core.publisher.Flux
-import reactor.core.publisher.Mono
-import reactor.test.StepVerifier
+import org.springframework.data.relational.core.query.isEqual
 
 @SpringBootTest
 class ReadMusicianServiceTest @Autowired constructor(
@@ -19,7 +21,7 @@ class ReadMusicianServiceTest @Autowired constructor(
 
 	@Test
 	@DisplayName("fetch musician by id")
-	fun musicianByIdTEST() {
+	fun musicianByIdTEST() = runTest{
 		// given
 		val id = 1L
 
@@ -27,16 +29,12 @@ class ReadMusicianServiceTest @Autowired constructor(
 		val selected = read.musicianById(id)
 
 		// then
-		selected.`as`(StepVerifier::create)
-				.assertNext {
-					assertThat(it.name).isEqualTo("Charlie Parker")
-				}
-				.verifyComplete()
+		assertThat(selected!!.name).isEqualTo("Charlie Parker")
 	}
 
 	@Test
 	@DisplayName("fetch musician by id or throw")
-	fun musicianByIdOrThrowTEST() {
+	fun musicianByIdOrThrowTEST() = runTest{
 		// given
 		//val id = 1L
 		val id = 1111L
@@ -45,105 +43,80 @@ class ReadMusicianServiceTest @Autowired constructor(
 		val selected = read.musicianByIdOrThrow(id)
 
 		// then
-		selected.`as`(StepVerifier::create)
-				.assertNext {
-					assertThat(it.name).isEqualTo("Charlie Parker")
-				}
-				.verifyComplete()
+		assertThat(selected!!.name).isEqualTo("Charlie Parker")
+
+	}
+
+	@Test
+	@DisplayName("fetch musicians pagination")
+	fun musiciansTEST() = runTest{
+		// given
+		val pageable = PageRequest.of(0, 3)
+
+		// when
+		val musicians = read.musicians(pageable)
+										.toList()
+										.map { it.name }
+		// then
+		assertThat(musicians.size).isEqualTo(3)
+		assertThat(musicians[0]).isEqualTo("Charlie Parker")
 	}
 
 	@Test
 	@DisplayName("total musician count test")
-	fun totalCountTEST() {
+	fun totalCountTEST() = runTest{
 		// when
-		val count: Mono<Long> = read.totalCount()
+		val count = read.totalCount()
 
 		// then
-		count.`as`(StepVerifier::create)
-			 .assertNext {
-				// 현재 5개의 row가 있다.
-				assertThat(it).isEqualTo(5)
-			 }
-			 .verifyComplete()
+		assertThat(count).isEqualTo(10)
 	}
-
-//	@Test
-//	@DisplayName("musicians list test")
-//	fun musiciansTEST() {
-//		// given
-//		// 2개의 정보만 가져와 보자.
-//		val query = Query(1, 2)
-//
-//		// when
-//		val musicians: Flux<String> = read.musicians(query.fromPageable())
-//										  .map { it.name }
-//
-//		// then
-//		musicians.`as`(StepVerifier::create)
-//				 .expectNext("Charlie Parker")
-//				 .expectNext("John Coltrane")
-//				 .verifyComplete()
-//
-//	}
 
 	@Test
 	@DisplayName("musicians list by query test")
-	fun musiciansByQueryTEST() {
+	fun musiciansByQueryTEST() = runTest{
 
 		val list = emptyList<Criteria>()
 
 		// given
-		val match = query(Criteria.from(list))
+		val match = query(Criteria.from(list)).limit(2).offset(0)
 
 		// when
-		val musicians: Flux<String> = read.musiciansByQuery(
-			// page 0, size 2
-			match.limit(2)
-				 .offset(0)
-		)
-		.map {
-	 		it.name
-		}
+		val musicians: List<String> = read.musiciansByQuery(match)
+										  .toList()
+										  .map { it.name }
 
 		// then
-		musicians.`as`(StepVerifier::create)
-				 .expectNext("Charlie Parker")
-				 //.expectNext("John Coltrane")
-				 .verifyComplete()
+		assertThat(musicians.size).isEqualTo(2)
 
 	}
 
 	@Test
 	@DisplayName("total musician count by query test")
-	fun totalCountByQueryTEST() {
+	fun totalCountByQueryTEST() = runTest{
 		// given
-		val match = query(where("name").like("%윙스%"))
+		val match = query(where("genre").isEqual("JAZZ"))
 
 		// when
-		val count: Mono<Long> = read.totalCountByQuery(match)
+		val count = read.totalCountByQuery(match)
 
 		// then
-		count.`as`(StepVerifier::create)
-			 .assertNext {
-				// 현재 1개의 row가 있다.
-			 	assertThat(it).isEqualTo(1)
-			 }
-			 .verifyComplete()
+		assertThat(count).isEqualTo(4)
 	}
 
 	@Test
 	@DisplayName("musician with records test")
-	fun musicianWithRecordsTEST() {
+	fun musicianWithRecordsTEST() = runTest{
 		// given
 		val id = 10L
 
-		val musician = read.musicianWithRecords(id)
-		musician.`as`(StepVerifier::create)
-				.assertNext {
-					assertThat(it.name).isEqualTo("스윙스")
-					assertThat(it.records!!.size).isEqualTo(5)
-				}
-				.verifyComplete()
+		// when
+		val musician = read.musicianWithRecords(id) ?: notFound()
+
+		// then
+		assertThat(musician.name).isEqualTo("스윙스")
+		assertThat(musician.records!!.size).isEqualTo(5)
+
 	}
 
 }

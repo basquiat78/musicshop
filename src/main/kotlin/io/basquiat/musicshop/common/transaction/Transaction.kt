@@ -2,11 +2,10 @@ package io.basquiat.musicshop.common.transaction
 
 import org.springframework.stereotype.Component
 import org.springframework.transaction.reactive.TransactionalOperator
-import reactor.core.publisher.Flux
-import reactor.core.publisher.Mono
+import org.springframework.transaction.reactive.executeAndAwait
 
 @Component
-class Transaction(
+class Transaction (
     transactionalOperator: TransactionalOperator
 ) {
     init {
@@ -14,16 +13,17 @@ class Transaction(
     }
     companion object {
         lateinit var transactionalOperator: TransactionalOperator
-        fun <T> withRollback(publisher: Mono<T>): Mono<T> {
-            return transactionalOperator.execute { tx ->
-                tx.setRollbackOnly()
-                publisher
-            }.next()
+        suspend fun <T, S> withRollback(value: T, receiver: suspend (T) -> S): S {
+            return transactionalOperator.executeAndAwait {
+                it.setRollbackOnly()
+                receiver(value)
+            }
         }
-        fun <T> withRollback(publisher: Flux<T>): Flux<T> {
-            return transactionalOperator.execute { tx ->
-                tx.setRollbackOnly()
-                publisher
+
+        suspend fun withRollback(receiver: suspend () -> Unit) {
+            return transactionalOperator.executeAndAwait {
+                it.setRollbackOnly()
+                receiver()
             }
         }
     }

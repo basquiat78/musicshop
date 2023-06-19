@@ -7,13 +7,12 @@ import io.basquiat.musicshop.api.usecase.record.model.UpdateRecord
 import io.basquiat.musicshop.common.model.request.QueryPage
 import io.basquiat.musicshop.domain.record.model.entity.Record
 import jakarta.validation.Valid
+import kotlinx.coroutines.flow.Flow
 import org.springframework.data.domain.Page
 import org.springframework.http.HttpStatus
 import org.springframework.util.MultiValueMap
 import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.*
-import reactor.core.publisher.Flux
-import reactor.core.publisher.Mono
 
 @Validated
 @RestController
@@ -25,34 +24,34 @@ class RecordController(
 
     @GetMapping("/{id}")
     @ResponseStatus(HttpStatus.OK)
-    fun fetchRecord(@PathVariable("id") id: Long): Mono<Record> {
+    suspend fun fetchRecord(@PathVariable("id") id: Long): Record {
         return readRecordUseCase.recordById(id)
     }
 
     @GetMapping("/query/{queryCondition}")
     @ResponseStatus(HttpStatus.OK)
-    fun fetchRecord(
+    fun fetchAllRecords(
         @Valid queryPage: QueryPage,
         @MatrixVariable(pathVar = "queryCondition", required = false) matrixVariable: MultiValueMap<String, Any>
-    ): Flux<Record> {
+    ): Flow<Record> {
         return readRecordUseCase.allRecords(queryPage, matrixVariable)
     }
 
     @GetMapping("/musician/{musicianId}")
     @ResponseStatus(HttpStatus.OK)
-    fun fetchRecordByMusician(@Valid queryPage: QueryPage, @PathVariable("musicianId") musicianId: Long): Mono<Page<Record>> {
+    suspend fun fetchRecordByMusician(@Valid queryPage: QueryPage, @PathVariable("musicianId") musicianId: Long): Page<Record> {
         return readRecordUseCase.recordByMusicianId(queryPage, musicianId)
     }
 
     @PostMapping("")
     @ResponseStatus(HttpStatus.CREATED)
-    fun createRecord(@RequestBody @Valid command: CreateRecord): Mono<Record> {
+    suspend fun createRecord(@RequestBody @Valid command: CreateRecord): Record {
         return writeRecordUseCase.insert(command)
     }
 
     @PatchMapping("/{id}")
     @ResponseStatus(HttpStatus.OK)
-    fun updateRecord(@PathVariable("id") id: Long, @RequestBody command: UpdateRecord): Mono<Record> {
+    suspend fun updateRecord(@PathVariable("id") id: Long, @RequestBody command: UpdateRecord): Record {
         return writeRecordUseCase.update(id, command)
     }
 

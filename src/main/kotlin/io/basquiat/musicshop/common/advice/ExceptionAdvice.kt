@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.bind.support.WebExchangeBindException
 import reactor.core.publisher.Mono
+import java.time.LocalDateTime.now
 import java.util.regex.Matcher
 import java.util.regex.Pattern
 
@@ -23,26 +24,42 @@ class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     @ExceptionHandler(NotFoundException::class)
     fun handleNotFoundException(ex: NotFoundException): Mono<ApiError> {
-        return Mono.just(ApiError(code = HttpStatus.NOT_FOUND.value(), message = ex.message!!))
+        return Mono.just(ApiError(
+            code = HttpStatus.NOT_FOUND.value(),
+            message = ex.message!!,
+            timestamp = now(),
+        ))
     }
 
     @ResponseStatus(HttpStatus.NOT_FOUND)
     @ExceptionHandler(MissingInformationException::class)
     fun handleMissingInformationException(ex: MissingInformationException): Mono<ApiError> {
-        return Mono.just(ApiError(code = HttpStatus.NOT_FOUND.value(), message = ex.message!!))
+        return Mono.just(ApiError(
+            code = HttpStatus.NOT_FOUND.value(),
+            message = ex.message!!,
+            timestamp = now(),
+        ))
     }
 
     @ResponseStatus(HttpStatus.NOT_FOUND)
     @ExceptionHandler(BadParameterException::class)
     fun handleBadParameterException(ex: BadParameterException): Mono<ApiError> {
-        return Mono.just(ApiError(code = HttpStatus.NOT_FOUND.value(), message = ex.message!!))
+        return Mono.just(ApiError(
+            code = HttpStatus.NOT_FOUND.value(),
+            message = ex.message!!,
+            timestamp = now(),
+        ))
     }
 
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(WebExchangeBindException::class)
     fun handleException(ex: WebExchangeBindException): Mono<ApiError> {
         val errors = ex.bindingResult.allErrors.first()
-        return Mono.just(ApiError(code = HttpStatus.BAD_REQUEST.value(), message = errors.defaultMessage!!))
+        return Mono.just(ApiError(
+            code = HttpStatus.BAD_REQUEST.value(),
+            message = errors.defaultMessage!!,
+            timestamp = now(),
+        ))
     }
 
     @ResponseStatus(HttpStatus.BAD_REQUEST)
@@ -52,10 +69,18 @@ class GlobalExceptionHandler {
         if (ex.cause != null && ex.cause is InvalidFormatException) {
             val matcher: Matcher = enumMessage.matcher(ex.cause!!.message)
             if (matcher.find()) {
-                return Mono.just(ApiError(code = HttpStatus.BAD_REQUEST.value(), message = "enum value should be: " + matcher.group(1)))
+                return Mono.just(ApiError(
+                    code = HttpStatus.BAD_REQUEST.value(),
+                    message = "enum value should be: " + matcher.group(1),
+                    timestamp = now(),
+                ))
             }
         }
-        return Mono.just(ApiError(code = HttpStatus.BAD_REQUEST.value(), message = ex.message!!))
+        return Mono.just(ApiError(
+            code = HttpStatus.BAD_REQUEST.value(),
+            message = ex.message!!,
+            timestamp = now(),
+        ))
     }
 
     @ResponseStatus(HttpStatus.BAD_REQUEST)
@@ -65,10 +90,18 @@ class GlobalExceptionHandler {
         if (ex.cause != null && ex.cause is ConversionFailedException) {
             val matcher: Matcher = enumMessage.matcher(ex.cause!!.message)
             if (matcher.matches()) {
-                return Mono.just(ApiError(code = HttpStatus.BAD_REQUEST.value(), message = "Sort Direction should be: [DESC, ASC]"))
+                return Mono.just(ApiError(
+                    code = HttpStatus.BAD_REQUEST.value(),
+                    message = "Sort Direction should be: [DESC, ASC]",
+                    timestamp = now(),
+                ))
             }
         }
-        return Mono.just(ApiError(code = HttpStatus.BAD_REQUEST.value(), message = ex.message!!))
+        return Mono.just(ApiError(
+            code = HttpStatus.BAD_REQUEST.value(),
+            message = ex.message!!,
+            timestamp = now(),
+        ))
     }
 
 }

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.JsonInclude
 import io.basquiat.musicshop.domain.musician.model.code.Genre
 import io.basquiat.musicshop.domain.record.model.entity.Record
 import org.springframework.data.annotation.Id
+import org.springframework.data.annotation.Transient
 import org.springframework.data.relational.core.mapping.Column
 import org.springframework.data.relational.core.mapping.Table
 import java.time.LocalDateTime

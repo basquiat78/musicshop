@@ -1,11 +1,13 @@
 package io.basquiat.musicshop.api.usecase.musician
 
+import io.basquiat.musicshop.common.model.request.QueryPage
+import kotlinx.coroutines.test.runTest
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
-import reactor.test.StepVerifier
+import org.springframework.util.LinkedMultiValueMap
 
 @SpringBootTest
 class ReadMusicianUseCaseTest @Autowired constructor(
@@ -14,37 +16,33 @@ class ReadMusicianUseCaseTest @Autowired constructor(
 
 	@Test
 	@DisplayName("musicianById test")
-	fun musicianByIdTEST() {
+	fun musicianByIdTEST() = runTest{
 		// given
 		val id = 1L
 
 		// when
-		val mono = readUseCase.musicianById(id)
+		val musician = readUseCase.musicianById(id)
 
 		// then
-		mono.`as`(StepVerifier::create)
-			.assertNext {
-				assertThat(it.name).isEqualTo("Charlie Parker")
-			}
-			.verifyComplete()
+		assertThat(musician.name).isEqualTo("Charlie Parker")
 	}
 
-//	@Test
-//	@DisplayName("musicians list test")
-//	fun allTEST() {
-//		// given
-//		val query = Query(1, 10)
-//
-//		// when
-//		val mono = readUseCase.all(query)
-//
-//		// then
-//		mono.`as`(StepVerifier::create)
-//			.assertNext {
-//				// 전체 row는 5개이므로
-//				assertThat(it.totalElements).isEqualTo(5)
-//			}
-//			.verifyComplete()
-//	}
+	@Test
+	@DisplayName("musicians By Query test")
+	fun musiciansByQueryTEST() = runTest{
+		// given
+		val query = QueryPage(1, 10, column = "id", sort = "DESC")
+		val matrixVariable = LinkedMultiValueMap<String, Any>()
+		matrixVariable.put("genre", listOf("eq", "JAZZ"))
+
+		// when
+		val musiciansName = readUseCase.musiciansByQuery(query, matrixVariable)
+												   .content
+												   .map { it.name }
+		// then
+		assertThat(musiciansName.size).isEqualTo(5)
+		assertThat(musiciansName[0]).isEqualTo("Coleman Hawkins")
+
+	}
 
 }

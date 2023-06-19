@@ -1,5 +1,6 @@
 package io.basquiat.musicshop.api.usecase.record.model
 
+import io.basquiat.musicshop.common.constraint.EnumCheck
 import io.basquiat.musicshop.domain.record.model.code.ReleasedType
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotNull
@@ -14,7 +15,8 @@ data class CreateRecord(
     @field:NotNull(message = "레이블 정보가 누락되었습니다.")
     var label: String,
     @field:NotNull(message = "음반 형태 정보가 누락되었습니다.")
-    var releasedType: ReleasedType?,
+    @field:EnumCheck(enumClazz = ReleasedType::class, message = "releasedType 필드는 SINGLE, FULL, EP, OST, COMPILATION, LIVE, MIXTAPE 만 가능합니다.")
+    var releasedType: String,
     @field:Min(0, message = "음반 발매일이 누락되었습니다.")
     var releasedYear: Int,
     @field:NotNull(message = "음반 포맷 형식이 누락되엇습니다.")

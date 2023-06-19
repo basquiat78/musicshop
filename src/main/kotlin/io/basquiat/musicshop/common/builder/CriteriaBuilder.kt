@@ -48,7 +48,7 @@ fun createNativeWhereClause(prefix: String, clazz: KClass<*>, matrixVariable: Mu
 fun createNativeSortLimitClause(prefix: String, clazz: KClass<*>, queryPage: QueryPage): Pair<String, String> {
     val nativeColumn = queryPage.column?.let { getNativeColumn(it, clazz) } ?: ""
     val sort = if (nativeColumn.isNotBlank() && queryPage.sort != null) {
-        "ORDER BY ${prefix}.${nativeColumn} ${queryPage.sort.name}"
+        "ORDER BY ${prefix}.${nativeColumn} ${queryPage.sort}"
     } else {
         "ORDER BY ${prefix}.id"
     }
