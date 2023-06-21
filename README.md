@@ -62,3 +62,7 @@
 [01-using-controller-musician](https://github.com/basquiat78/musicshop/tree/01-using-controller-musician)
 
 [02-using-controller-record](https://github.com/basquiat78/musicshop/tree/02-using-controller-record)
+
+[03-using-functional-endpoints](https://github.com/basquiat78/musicshop/tree/03-using-functional-endpoints)
+
+[04-using-controller-with-coroutine](https://github.com/basquiat78/musicshop/tree/04-using-controller-with-coroutine)
