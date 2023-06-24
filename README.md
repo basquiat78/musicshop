@@ -66,3 +66,5 @@
 [03-using-functional-endpoints](https://github.com/basquiat78/musicshop/tree/03-using-functional-endpoints)
 
 [04-using-controller-with-coroutine](https://github.com/basquiat78/musicshop/tree/04-using-controller-with-coroutine)
+
+[05-using-functional-endpoints-with-coroutine](https://github.com/basquiat78/musicshop/tree/05-using-functional-endpoints-with-coroutine)
