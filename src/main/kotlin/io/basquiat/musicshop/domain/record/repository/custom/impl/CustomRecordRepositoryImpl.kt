@@ -1,49 +1,60 @@
 package io.basquiat.musicshop.domain.record.repository.custom.impl
 
-import io.basquiat.musicshop.domain.record.mapper.RecordMapper
+import io.basquiat.musicshop.domain.musician.model.entity.Musician
 import io.basquiat.musicshop.domain.record.model.entity.Record
 import io.basquiat.musicshop.domain.record.repository.custom.CustomRecordRepository
+import io.basquiat.musicshop.entity.tables.JMusician
+import io.basquiat.musicshop.entity.tables.JRecord
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.reactor.awaitSingle
-import org.springframework.data.r2dbc.core.R2dbcEntityTemplate
-import org.springframework.data.relational.core.query.Criteria.where
-import org.springframework.data.relational.core.query.Query.query
-import org.springframework.data.relational.core.query.Update
-import org.springframework.data.relational.core.sql.SqlIdentifier
-import org.springframework.r2dbc.core.flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.reactive.asFlow
+import kotlinx.coroutines.reactive.awaitSingle
+import org.jooq.Condition
+import org.jooq.DSLContext
+import org.jooq.Field
+import org.jooq.SortField
+import org.springframework.data.domain.PageRequest
 
 class CustomRecordRepositoryImpl(
-    private val query: R2dbcEntityTemplate,
-    private val recordMapper: RecordMapper,
+    private val query: DSLContext,
 ): CustomRecordRepository {
 
-    override suspend fun updateRecord(record: Record, assignments: MutableMap<SqlIdentifier, Any>): Record {
-        return query.update(Record::class.java)
-                    .matching(query(where("id").`is`(record.id!!)))
-                    .apply(Update.from(assignments))
-                    .thenReturn(record)
+    override suspend fun updateRecord(id: Long, assignments: MutableMap<Field<*>, Any>): Int {
+        val record = JRecord.RECORD
+        return query.update(record)
+                    .set(assignments)
+                    .where(record.ID.eq(id))
                     .awaitSingle()
     }
 
-    override fun findAllRecords(whereClause: String, orderClause: String, limitClause: String): Flow<Record> {
-        var sql = """
-            SELECT musician.name AS musicianName,
-                   musician.genre,
-                   musician.created_at AS mCreatedAt,
-                   musician.updated_at AS mUpdatedAt,
-                   record.*
-              FROM record
-              INNER JOIN musician
-              ON record.musician_id = musician.id
-              WHERE 1 = 1
-              $whereClause
-              $orderClause
-              $limitClause
-        """.trimIndent()
-        return query.databaseClient
-                    .sql(sql)
-                    .map(recordMapper::apply)
-                    .flow()
+    override fun findAllRecords(conditions: List<Condition>, pagination: Pair<List<SortField<*>>, PageRequest>): Flow<Record> {
+        val record = JRecord.RECORD
+        val musician = JMusician.MUSICIAN
+        val sqlBuilder= query.select(
+            record,
+            musician
+        )
+        .from(record)
+        .join(musician).on(record.MUSICIAN_ID.eq(musician.ID))
+        .where()
+
+        if(conditions.isNotEmpty()) {
+            conditions.forEach { sqlBuilder.and(it) }
+        }
+
+        if(pagination.first.isNotEmpty()) {
+            sqlBuilder.orderBy(pagination.first)
+        }
+        sqlBuilder.limit(pagination.second.pageSize)
+                  .offset(pagination.second.offset)
+
+        return sqlBuilder.asFlow()
+                         .map {
+                               val selectRecord = it.value1().into(Record::class.java)
+                               val selectMusician = it.value2().into(Musician::class.java)
+                               selectRecord.musician = selectMusician
+                               selectRecord
+                         }
 
     }
 

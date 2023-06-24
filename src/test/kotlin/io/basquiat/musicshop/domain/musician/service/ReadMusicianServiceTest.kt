@@ -1,6 +1,9 @@
 package io.basquiat.musicshop.domain.musician.service
 
+import io.basquiat.musicshop.common.builder.createQuery
+import io.basquiat.musicshop.common.model.request.QueryPage
 import io.basquiat.musicshop.common.utils.notFound
+import io.basquiat.musicshop.entity.tables.JMusician
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.assertj.core.api.Assertions.assertThat
@@ -9,10 +12,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.data.domain.PageRequest
-import org.springframework.data.relational.core.query.Criteria
-import org.springframework.data.relational.core.query.Criteria.where
-import org.springframework.data.relational.core.query.Query.query
-import org.springframework.data.relational.core.query.isEqual
+import org.springframework.util.LinkedMultiValueMap
 
 @SpringBootTest
 class ReadMusicianServiceTest @Autowired constructor(
@@ -21,7 +21,7 @@ class ReadMusicianServiceTest @Autowired constructor(
 
 	@Test
 	@DisplayName("fetch musician by id")
-	fun musicianByIdTEST() = runTest{
+	fun musicianByIdTEST() = runTest {
 		// given
 		val id = 1L
 
@@ -34,7 +34,7 @@ class ReadMusicianServiceTest @Autowired constructor(
 
 	@Test
 	@DisplayName("fetch musician by id or throw")
-	fun musicianByIdOrThrowTEST() = runTest{
+	fun musicianByIdOrThrowTEST() = runTest {
 		// given
 		//val id = 1L
 		val id = 1111L
@@ -43,13 +43,13 @@ class ReadMusicianServiceTest @Autowired constructor(
 		val selected = read.musicianByIdOrThrow(id)
 
 		// then
-		assertThat(selected!!.name).isEqualTo("Charlie Parker")
+		assertThat(selected.name).isEqualTo("Charlie Parker")
 
 	}
 
 	@Test
 	@DisplayName("fetch musicians pagination")
-	fun musiciansTEST() = runTest{
+	fun musiciansTEST() = runTest {
 		// given
 		val pageable = PageRequest.of(0, 3)
 
@@ -64,7 +64,7 @@ class ReadMusicianServiceTest @Autowired constructor(
 
 	@Test
 	@DisplayName("total musician count test")
-	fun totalCountTEST() = runTest{
+	fun totalCountTEST() = runTest {
 		// when
 		val count = read.totalCount()
 
@@ -74,39 +74,47 @@ class ReadMusicianServiceTest @Autowired constructor(
 
 	@Test
 	@DisplayName("musicians list by query test")
-	fun musiciansByQueryTEST() = runTest{
-
-		val list = emptyList<Criteria>()
-
+	fun musiciansByQueryTEST() = runTest {
 		// given
-		val match = query(Criteria.from(list)).limit(2).offset(0)
+		val multiValueMap = LinkedMultiValueMap<String, Any>()
+		multiValueMap.add("genre", "like")
+		multiValueMap.add("genre", "HIP")
+		println(multiValueMap)
+		val conditions = createQuery(multiValueMap, JMusician.MUSICIAN)
+
+		//val queryPage = QueryPage(page = 1, size = 5, column = "id", sort = "DESC")
+		val queryPage = QueryPage(page = 1, size = 5)
 
 		// when
-		val musicians: List<String> = read.musiciansByQuery(match)
-										  .toList()
-										  .map { it.name }
+		val musicians = read.musiciansByQuery(conditions, queryPage.pagination(JMusician.MUSICIAN))
+							  			  .toList()
 
 		// then
-		assertThat(musicians.size).isEqualTo(2)
+		assertThat(musicians.size).isEqualTo(5)
 
 	}
 
 	@Test
 	@DisplayName("total musician count by query test")
-	fun totalCountByQueryTEST() = runTest{
+	fun totalCountByQueryTEST() = runTest {
 		// given
-		val match = query(where("genre").isEqual("JAZZ"))
+		val multiValueMap = LinkedMultiValueMap<String, Any>()
+		multiValueMap.add("genre", "like")
+		multiValueMap.add("genre", "HIPHOP")
+		println(multiValueMap)
+		val conditions = createQuery(multiValueMap, JMusician.MUSICIAN)
 
 		// when
-		val count = read.totalCountByQuery(match)
+		val count = read.totalCountByQuery(conditions)
 
 		// then
-		assertThat(count).isEqualTo(4)
+		assertThat(count).isEqualTo(10)
 	}
+
 
 	@Test
 	@DisplayName("musician with records test")
-	fun musicianWithRecordsTEST() = runTest{
+	fun musicianWithRecordsTEST() = runTest {
 		// given
 		val id = 10L
 

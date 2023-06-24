@@ -51,7 +51,7 @@ class RecordController(
 
     @PatchMapping("/{id}")
     @ResponseStatus(HttpStatus.OK)
-    suspend fun updateRecord(@PathVariable("id") id: Long, @RequestBody command: UpdateRecord): Record {
+    suspend fun updateRecord(@PathVariable("id") id: Long, @RequestBody @Valid command: UpdateRecord): Record {
         return writeRecordUseCase.update(id, command)
     }
 

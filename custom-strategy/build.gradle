@@ -1,0 +1,13 @@
+plugins {
+    id 'java'
+}
+
+def jooqVersion = "3.18.5"
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation("org.jooq:jooq-codegen:${jooqVersion}")
+}

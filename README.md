@@ -1,17 +1,129 @@
-# MusicShop Using Controller With Coroutine Extension
+# MusicShop integration jooQ
 
-이 방식은 기존의 프로듀서인 `Flux`, `Mono`가 아닌 일반적인 `Web MVC`방식과 거의 흡사하다.
+`jooq`와 `queryDSL`은 비슷한 경험을 제공하는 라이브러리이다.
 
-# Before
+`queryDSL`이 `jpa`와 연계해서 사용하기 용이하기 때문에 같이 묶이긴 하지만 엄연히 말하면 이 둘은 `orm`과는 무관한 쿼리 빌더이다.
 
-이런 방식을 사용하기 위해서는 코틀린에서 제공하는 라이브러리를 먼저 그레이들에 설정하자.
+믈론 `jooQ`와 `jpa`를 연계해서 사용할 수 있다.
+
+`queryDSL`도 `jpa`와 연계해서 사용한다는 개념이 박혀서 그렇지 실제로 `queryDSL-sql`같은 코어 라이브러러를 통해 순수한 쿼리 빌더로 사용하기도 한다.
+
+하지만 대부분 `orm`을 쓰지 않는 환경내에서 오라클 디비를 사용하지 않는다면 쿼리 빌더로는 `jooQ`가 좀 더 인기있는 듯 하다.
+
+뭐...`jooQ`의 약자가 딱 봐도 `Java Object Oriented Querying`이니 어쩌면 `R2DBC`같은 환경에서는 더할 나위 없는 라이브러리가 아닐까 한다.
+
+하지만 개인적인 생각이니 이 부분은 넘어가자.
+
+# pre work
+
+실제 [Reactive SQL with jOOQ 3.15 and R2DBC](https://blog.jooq.org/reactive-sql-with-jooq-3-15-and-r2dbc/)을 따라가보면 아쉬움 부분이 있다.
+
+`DslContext`을 사용해 쿼리 빌더를 할 때 반환되는 타입은 발행자인 `Mono`, `Flux`로 감싸인 타입이 아니기 때문에 일일히 수작업을 해줘야 한다.
+
+공식 블로그의 코드대로라면 
+
+```
+Flux.from(dslContext
+        .insertInto(AUTHOR)
+        .columns(AUTHOR.FIRST_NAME, AUTHOR.LAST_NAME)
+        .values("John", "Doe")
+    .returningResult(AUTHOR.ID)
+)
+```
+처럼 일일히 `Flux`로 변환해 줘야 한다는 것이다.
+
+하지만 해당 프로젝트는 코틀린의 코루틴을 기반으로 사용할 예정이다.
+
+공식 사이트에서 [jooQ Kotlin coroutine support](https://www.jooq.org/doc/latest/manual/sql-building/kotlin-sql-building/kotlin-coroutines/)를 하기 때문에 이런 불필요함이 사라진다.
+
+따라서 위 사이트의 내용을 한번 훝어보면 좋다.
+
+# gradle setting
+
+다음 공식 사이트의 내용을 토대로 작성되었다.
+
+[Running the code generator with Gradle](https://www.jooq.org/doc/latest/manual/code-generation/codegen-gradle/)
+
+여기 보면 `nu.studer.jooq`라는 플러그인을 사용하고 있다.
+
+해당 플로그인 깃헙 주소가 있는데 다음 깃헙의 가이드라인을 따른다.
+
+[gradle-jooq-plugin](https://github.com/etiennestuder/gradle-jooq-plugin)
+
+또한 `jooQ`를 통해서 엔티티 생성시 기존에 만든 엔티티 명과 충돌이 나기 때문에 빌드시 바꿔줘야 한다.
+
+## 최악의 삽질
+
+일반적으로 `queryDSL`의 경우에는 `QType`로 생성하는데 지금 `jooQ`에서는 미리 지정한 `sql_schema`읽어서 엔티티를 생성한다.
+
+작성한 엔티티 객체와 `jooQ`가 생성한 객체명이 같아서 `jooQ`가 관련 객체 생성시 이름을 변경할려고 했다.
+
+예전에 공식 깃헙에 보면 `buildSrc`같은 방식을 통해서 `CustomStrategy`클래스를 정의해서 사용하는 방법을 제시한다.
+
+또는 [gradle-jooq-plugin](https://github.com/etiennestuder/gradle-jooq-plugin)에서 제공하는 멀티 모듈 방식이 있다.
+
+하지만 지금 이 프로젝트의 버전으로는 `buildSrc`의 경우에는 되지 않는다.
+
+물론 `jooQ`에서 예제로 제공하는 `org.jooq.codegen.example.JPrefixGeneratorStrategy`를 사용하면 된다.
+
+하지만 언제 어떻게 될지 모르기 때문에 같은 코드라 할지라도 `CusomtStrategy`를 사용할수 있도록 하자.
+
+따라서 다음과 같이 [configure_custom_generator_strategy](https://github.com/etiennestuder/gradle-jooq-plugin/tree/main/example/configure_custom_generator_strategy)을 활용해 최종적으로 설정하는 방식을 사용해야 한다.
+
+먼저 `root project`에 `custom-strategy`모듈을 생성하자.
+
+그리고 `CustomGeneratorStrategy`를 작성한다.
+
+```java
+public class CustomGeneratorStrategy extends DefaultGeneratorStrategy {
+
+    @Override
+    public String getJavaClassName(final Definition definition, final Mode mode) {
+        return 'J' + super.getJavaClassName(definition, mode);
+    }
+}
+```
+`custom-steratey`내의 `build.gradle`은 다음과 같이 심플하다.
 
 ```groovy
+plugins {
+    id 'java'
+}
+
+def jooqVersion = "3.18.5"
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation("org.jooq:jooq-codegen:${jooqVersion}")
+}
+```
+루트의 `settings.gradle.kts`을 다음과 같이 설정한다.
+
+```groovy
+plugins {
+    id("com.gradle.enterprise") version "3.13"
+}
+
+rootProject.name = "musicshop"
+
+include(/* ...projectPaths = */ "custom-strategy")
+
+```
+그리고 `build.gradle.kts`는 [gradle-jooq-plugin](https://github.com/etiennestuder/gradle-jooq-plugin)에서 제공하는 예제를 따라한다.
+
+```groovy
+import nu.studer.gradle.jooq.JooqEdition
+import nu.studer.gradle.jooq.JooqGenerate
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.jooq.meta.jaxb.Property
 
 plugins {
     id("org.springframework.boot") version "3.1.0"
     id("io.spring.dependency-management") version "1.1.0"
+    id("nu.studer.jooq") version "8.2.1"
     kotlin("jvm") version "1.8.21"
     kotlin("plugin.spring") version "1.8.21"
 }
@@ -20,515 +132,231 @@ group = "io.basquiat"
 version = "0.0.1-SNAPSHOT"
 java.sourceCompatibility = JavaVersion.VERSION_17
 
+val jooqVersion = "3.18.5"
+
 repositories {
-    mavenCentral()
+	mavenCentral()
 }
 
 dependencies {
-    implementation("org.springframework.boot:spring-boot-starter-actuator")
-    implementation("org.springframework.boot:spring-boot-starter-data-r2dbc")
-    implementation("org.springframework.boot:spring-boot-starter-webflux")
-    implementation("org.springframework.boot:spring-boot-starter-validation")
-    
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
-    
-    implementation("io.r2dbc:r2dbc-proxy:1.1.1.RELEASE")
-    
-    implementation("io.projectreactor.kotlin:reactor-kotlin-extensions")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
-    
-    implementation("org.jetbrains.kotlin:kotlin-reflect")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
-    
-    implementation("mysql:mysql-connector-java:8.0.33")
-    implementation("com.github.jasync-sql:jasync-r2dbc-mysql:2.1.24")
-    
-    developmentOnly("org.springframework.boot:spring-boot-devtools")
-    
-    testImplementation("io.projectreactor:reactor-test")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.1")
-    testImplementation("org.springframework.boot:spring-boot-starter-test") {
-        exclude(module = "junit-vintage-engine")
-    }
+	implementation("org.springframework.boot:spring-boot-starter-actuator")
+	implementation("org.springframework.boot:spring-boot-starter-data-r2dbc")
+	implementation("org.springframework.boot:spring-boot-starter-webflux")
+	implementation("org.springframework.boot:spring-boot-starter-validation")
+	implementation("org.springframework.boot:spring-boot-starter-jooq")
 
+	implementation("org.jooq:jooq-meta-extensions:${jooqVersion}")
+	implementation("org.jooq:jooq-kotlin:${jooqVersion}")
+	implementation("org.jooq:jooq-codegen:${jooqVersion}")
+
+	implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+
+	implementation("io.r2dbc:r2dbc-proxy:1.1.1.RELEASE")
+
+	implementation("io.projectreactor.kotlin:reactor-kotlin-extensions")
+	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
+
+	implementation("org.jetbrains.kotlin:kotlin-reflect")
+	implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
+
+	implementation("com.github.jasync-sql:jasync-r2dbc-mysql:2.1.24")
+
+	developmentOnly("org.springframework.boot:spring-boot-devtools")
+
+	implementation("io.projectreactor.tools:blockhound:1.0.8.RELEASE")
+	testImplementation("io.projectreactor:reactor-test")
+	testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
+	testImplementation("org.springframework.boot:spring-boot-starter-test") {
+		exclude(module = "junit-vintage-engine")
+	}
+
+	project("custom-strategy")
+
+	jooqGenerator("org.jooq:jooq-meta-extensions:${jooqVersion}")
+	jooqGenerator("mysql:mysql-connector-java:8.0.33")
+	jooqGenerator("jakarta.xml.bind:jakarta.xml.bind-api:4.0.0")
+	jooqGenerator(project("custom-strategy"))
 }
 
 tasks.withType<KotlinCompile> {
-    kotlinOptions {
-        freeCompilerArgs = listOf("-Xjsr305=strict")
-        jvmTarget = "17"
-    }
+	kotlinOptions {
+		freeCompilerArgs = listOf("-Xjsr305=strict")
+		jvmTarget = "17"
+	}
 }
 
 tasks.withType<Test> {
-    useJUnitPlatform()
+	useJUnitPlatform()
 }
 
+jooq {
+	version.set("$jooqVersion")
+	edition.set(JooqEdition.OSS)
+
+	evaluationDependsOn(":custom-strategy")
+
+	configurations {
+		create("main") {
+			generateSchemaSourceOnCompilation.set(true)
+
+			jooqConfiguration.apply {
+				logging = org.jooq.meta.jaxb.Logging.WARN
+				jdbc = null
+
+				generator.apply {
+					name = "org.jooq.codegen.KotlinGenerator"
+					strategy.apply {
+						name = "io.basquiat.strategy.CustomGeneratorStrategy"
+					}
+					database.apply {
+						name = "org.jooq.meta.extensions.ddl.DDLDatabase"
+						properties.addAll(
+							listOf(
+								Property().apply {
+									key = "scripts"
+									value = "src/main/resources/sql/sql_schema.sql"
+								},
+								Property().apply {
+									key = "sort"
+									value = "semantic"
+								},
+								Property().apply {
+									key = "unqualifiedSchema"
+									value = "none"
+								},
+								Property().apply {
+									key = "defaultNameCase"
+									value = "lower"
+								}
+							)
+						)
+					}
+					generate.apply {
+						isPojosAsKotlinDataClasses = true
+					}
+					target.apply {
+						packageName = "io.basquiat.musicshop.entity"
+						directory = "build/generated/jooq/main"
+					}
+				}
+			}
+		}
+	}
+}
+
+tasks.named<JooqGenerate>("generateJooq") {
+	allInputsDeclared.set(true)
+}
+
+tasks.named<nu.studer.gradle.jooq.JooqGenerate>("generateJooq") {
+	(launcher::set)(javaToolchains.launcherFor {
+		languageVersion.set(JavaLanguageVersion.of(17))
+	})
+}
 ```
-`io.projectreactor.kotlin:reactor-kotlin-extensions`, `org.jetbrains.kotlinx:kotlinx-coroutines-reactor`을 추가한다.
 
-그리고 테스트를 위한 `org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.1`도 같이 설정하자.
+여기서 확인할 부분이 몇가지 있다.
 
-# BaseRepository 설정
+```groovy
+project("custom-strategy") // custom-strategy 프로젝트를 디펜던시로 잡는다.
 
-이 방식을 사용할 때 몇 가지 추가적인 부분이 있다.
+jooqGenerator("org.jooq:jooq-meta-extensions:${jooqVersion}")
+jooqGenerator("mysql:mysql-connector-java:8.0.33")
+jooqGenerator("jakarta.xml.bind:jakarta.xml.bind-api:4.0.0")
+jooqGenerator(project("custom-strategy")) // 컴파일시에 jooqGenerator가 해당 프로젝트를 사용할 수 있도록 한다.
 
-기존 방식을 유지하기 위해서는 `R2dbcRepository`가 아닌 `CoroutineCrudRepository`을 사용해야 한다.
+// do configuration
 
-따라서 다음과 같이 공통으로 사용할 녀석을 정의하자.
+strategy.apply {
+    name = "io.basquiat.strategy.CustomGeneratorStrategy" // custom-strategy에서 작업한 custom strategy 클래스의 경로 포함 정보
+}
+
+database.apply {
+    name = "org.jooq.meta.extensions.ddl.DDLDatabase"
+    properties.addAll(
+            listOf(
+                    Property().apply {
+                        key = "scripts"
+                        value = "src/main/resources/sql/sql_schema.sql" // 정의한 테이블 생성 스키마 파일 경로
+                    },
+                    Property().apply {
+                        key = "sort"
+                        value = "semantic"
+                    },
+                    Property().apply {
+                        key = "unqualifiedSchema"
+                        value = "none"
+                    },
+                    Property().apply {
+                        key = "defaultNameCase"
+                        value = "lower"
+                    }
+            )
+    )
+}
+generate.apply {
+    isPojosAsKotlinDataClasses = true
+}
+target.apply {
+    // generate시 패키지 경로와 build 다이렉트 경로 설정을 하낟.
+    packageName = "io.basquiat.musicshop.entity"
+    directory = "build/generated/jooq/main"
+}
+```
+터미널에서 직접적으로 다음과 같이 명령어르 날려주던가
+
+```
+./gradlew generateJooq
+```
+
+또는 인텔리제이의 그레이들 항목에서 `project > Tasks > jooq`경로의 `generateJooq`를 클릭해서 빌드를 진행한다.
+
+빌드가 완료되면 `build`폴더내에 위에서 `target.apply`에서 정의한 `packageName`, `directory`경로로 생성된 코드를 볼 수 있다.
+
+# JooqConfiguration
+
+`JooqConfiguration`을 통해서 `DslContext`을 빈으로 등록하도록 하자.
 
 ```kotlin
-@NoRepositoryBean
-interface BaseRepository<M, ID>: CoroutineCrudRepository<M, ID>, CoroutineSortingRepository<M, ID>
-```
+@Configuration
+class JooqConfiguration {
 
-# CustomCrudRepositoryExtensions 수정
-
-기존에 우리가 사용하던 코드이다.
-
-```kotlin
-fun <T, ID> R2dbcRepository<T, ID>.findByIdOrThrow(id: ID, message: String? = null): Mono<T> {
-    return this.findById(id)
-               .switchIfEmpty { notFound(message?.let{ it } ?: "Id [$id]로 조회된 정보가 없습니다.") }
+    @Bean
+    fun dslContext(connectionFactory: ConnectionFactory) =
+        DSL.using(TransactionAwareConnectionFactoryProxy(connectionFactory), SQLDialect.MYSQL)
 
 }
 ```
+이제는 이것을 활용해서 `repositoy`의 코드들을 하나씩 수정해 나가자.
 
-하지만 이제는 이것을 사용하지 않고 아래 것을 사용하자.
+# CustomMusicianRepository 수정
 
-```kotlin
-suspend fun <T, ID> CoroutineCrudRepository<T, ID>.findByIdOrThrow(id: ID, message: String? = null): T {
-    return this.findById(id) ?: notFound(message)
-}
-```
-여기서 `suspend`가 붙은 것을 볼 수 있다.
+`CustomMusicianRepository`에서 먼저 `updateMusician`을 수정해 보자.
 
-또한 `Mono`가 아닌 일반적인 `Web MVC`의 패턴을 따라간다.
+먼저 `jooQ`의 `update`의 경우에는 과거 `PreparedStatement`의 방식을 따른다.
 
-실제로 `CoroutineCrudRepository`를 보면
+그래서 업데이트의 경과는 성공시 `1`로 넘어오게 되어 있다.
 
-```kotlin
-@NoRepositoryBean
-interface CoroutineCrudRepository<T, ID> : Repository<T, ID> {
-	suspend fun <S : T> save(entity: S): T
-	fun <S : T> saveAll(entities: Iterable<S>): Flow<S>
-	fun <S : T> saveAll(entityStream: Flow<S>): Flow<S>
-	suspend fun findById(id: ID): T?
-	suspend fun existsById(id: ID): Boolean
-	fun findAll(): Flow<T>
-	fun findAllById(ids: Iterable<ID>): Flow<T>
-	fun findAllById(ids: Flow<ID>): Flow<T>
-	suspend fun count(): Long
-	suspend fun deleteById(id: ID)
-	suspend fun delete(entity: T)
-	suspend fun deleteAllById(ids: Iterable<ID>)
-	suspend fun deleteAll(entities: Iterable<T>)
-	suspend fun <S : T> deleteAll(entityStream: Flow<S>)
-	suspend fun deleteAll()
-}
-```
-위 코드를 보면 `suspend`가 붙은 경우와 아닌 경우를 볼 수 있다.
-
-이것은 반환되는 타입에 따라 달라지는데 컬렉션의 경우에는 `Flow`로 감싸는 것을 알 수 있다.
-
-하지만 이것도 제공하는 `API`를 통해서 다루게 된다.
-
-# 차라리 새로 만든다는 느낌으로 시작하자.
-
-기존 코드가 변경되면서 대부분의 코드에서 에러가 나기 때문에 차라리 새로 작성한다는 마음으로 시작하는게 좋다.
-
-하지만 기존의 작업했던 디비에 쌓인 데이터를 통해서 먼저 `Read`쪽을 수정하도록 한다.
-
-# MusicianRepository 수정
-
-```kotlin
-
-// 기존 MusicianRepository
-interface MusicianRepository: R2dbcRepository<Musician, Long>, CustomMusicianRepository {
-    override fun findById(id: Long): Mono<Musician>
-    fun findAllBy(pageable: Pageable): Flux<Musician>
-}
-
-// 변경된 MusicianRepository
-interface MusicianRepository: BaseRepository<Musician, Long>, CustomMusicianRepository {
-    override suspend fun findById(id: Long): Musician?
-    fun findAllBy(pageable: Pageable): Flow<Musician>
-}
-```
-여기서 `Pageable`을 파라미터로 받는 `findAllBy`의 경우에는 `suspend`가 없고 `Flow`로 감싸진 것을 알 수 있다.
-
-내부적으로 이 경우에는 `suspend fun findAllBy(pageable: Pageable): List<Musician>`처럼 하게 되면
-
-```
-IllegalStateException: Method has to use a either 
-multi-item reactive wrapper return type or a wrapped Page/Slice type.
-```
-위와 같은 에러가 난다.
-
-아마도 이런 방식으로 지원을 하지 않는 듯 싶다.
-
-이 때 리스트가 아닌 `Flow`로 감싸서 처리하면 된다.
-
-기존의 만든 [CustomMusicianRepository](https://github.com/basquiat78/musicshop/blob/02-using-controller-record/src/main/kotlin/io/basquiat/musicshop/domain/musician/repository/custom/CustomMusicianRepository.kt)와 [CustomMusicianRepositoryImpl](https://github.com/basquiat78/musicshop/blob/02-using-controller-record/src/main/kotlin/io/basquiat/musicshop/domain/musician/repository/custom/impl/CustomMusicianRepositoryImpl.kt)도 변경하자.
+따라서 다음과 같이 수정한다.
 
 ```kotlin
 interface CustomMusicianRepository {
-    suspend fun updateMusician(musician: Musician, assignments: MutableMap<SqlIdentifier, Any>): Musician
-    fun musiciansByQuery(match: Query): Flow<Musician>
-    suspend fun totalCountByQuery(match: Query): Long
-    suspend fun musicianWithRecords(id: Long): Musician?
+    suspend fun updateMusician(musicianId: Long, assignments: MutableMap<Field<*>, Any>): Int
 }
 
 class CustomMusicianRepositoryImpl(
-    private val query: R2dbcEntityTemplate,
+    private val query: DSLContext,
 ): CustomMusicianRepository {
 
-    override suspend fun updateMusician(musician: Musician, assignments: MutableMap<SqlIdentifier, Any>): Musician {
-        return query.update(Musician::class.java)
-                    .matching(query(where("id").`is`(musician.id!!)))
-                    .apply(Update.from(assignments))
-                    .thenReturn(musician)
+    override suspend fun updateMusician(musicianId: Long, assignments: MutableMap<Field<*>, Any>): Int {
+        val musician = JMusician.MUSICIAN
+        return query.update(musician)
+                    .set(assignments)
+                    .where(musician.ID.`equal`(musicianId))
                     .awaitSingle()
     }
-
-    override fun musiciansByQuery(match: Query): Flow<Musician> {
-        return query.select(Musician::class.java)
-                    .matching(match)
-                    .flow()
-    }
-
-    override suspend fun totalCountByQuery(match: Query): Long {
-        return query.select(Musician::class.java)
-                    .matching(match)
-                    .count()
-                    .awaitSingle()
-    }
-
-    override suspend fun musicianWithRecords(id: Long): Musician? {
-        var sql = """
-            SELECT musician.id,
-                   musician.name,
-                   musician.genre,
-                   musician.created_at,         
-                   musician.updated_at,         
-                   record.id AS recordId,
-                   record.title,
-                   record.label,
-                   record.released_type,
-                   record.released_year,
-                   record.format,
-                   record.created_at AS rCreatedAt,
-                   record.updated_at AS rUpdatedAt
-            FROM musician
-            LEFT OUTER JOIN record ON musician.id = record.musician_id
-            WHERE musician.id = :id
-        """.trimIndent()
-
-        return query.databaseClient
-                    .sql(sql)
-                    .bind("id", id)
-                    .fetch()
-                    .all()
-                    .bufferUntilChanged { it["id"] }
-                    .map { rows ->
-                        val musician = Musician(
-                            id = rows[0]["id"]!! as Long,
-                            name = rows[0]["name"]!! as String,
-                            genre = Genre.valueOf(rows[0]["genre"]!! as String),
-                            createdAt = rows[0]["created_at"]?.let { it as LocalDateTime },
-                            updatedAt = rows[0]["updated_at"]?.let { it as LocalDateTime },
-                        )
-                        val records = rows.map {
-                            Record(
-                                id = it["recordId"]!! as Long,
-                                musicianId = rows[0]["id"]!! as Long,
-                                title = it["title"]!! as String,
-                                label = it["label"]!! as String,
-                                releasedType = ReleasedType.valueOf(it["released_type"]!! as String),
-                                releasedYear = it["released_year"]!! as Int,
-                                format = it["format"]!! as String,
-                                createdAt = it["rCreatedAt"]?.let { row -> row as LocalDateTime },
-                                updatedAt = it["rUpdatedAt"]?.let { row -> row as LocalDateTime },
-                            )
-                        }
-                        musician.records = records
-                        musician
-                    }
-                    .awaitFirst()
-    }
-
 }
 
-```
-
-여기서도 마찬가지로 `suspend`를 붙여준다.
-
-이 때 각 쿼리 로직 이후 `awaitXXX`같은 함수를 통해서 무언가를 처리하고 있다.
-
-또한 `Flux`의 경우에는 `flow()`함수를 통해서 `Flow<T>`로 처리하는 것을 알 수 있다.
-
-이와 관련 `Wawit.kt`에서 해답을 찾을 수 있다.
-```kotlin
-public suspend fun <T> Publisher<T>.awaitFirst(): T = awaitOne(Mode.FIRST)
-public suspend fun <T> Publisher<T>.awaitFirstOrDefault(default: T): T = awaitOne(Mode.FIRST_OR_DEFAULT, default)
-public suspend fun <T> Publisher<T>.awaitFirstOrNull(): T? = awaitOne(Mode.FIRST_OR_DEFAULT)
-public suspend fun <T> Publisher<T>.awaitFirstOrElse(defaultValue: () -> T): T = awaitOne(Mode.FIRST_OR_DEFAULT) ?: defaultValue()
-public suspend fun <T> Publisher<T>.awaitLast(): T = awaitOne(Mode.LAST)
-public suspend fun <T> Publisher<T>.awaitSingle(): T = awaitOne(Mode.SINGLE)
-@Deprecated public suspend fun <T> Publisher<T>.awaitSingleOrDefault(default: T): T = awaitOne(Mode.SINGLE_OR_DEFAULT, default)
-@Deprecated public suspend fun <T> Publisher<T>.awaitSingleOrNull(): T? = awaitOne(Mode.SINGLE_OR_DEFAULT)
-@Deprecated public suspend fun <T> Publisher<T>.awaitSingleOrElse(defaultValue: () -> T): T = awaitOne(Mode.SINGLE_OR_DEFAULT) ?: defaultValue()
-// more private fun
-```
-`Publisher<T>`로 부터 `T`객체를 얻는 방식이 마치 코루틴 빌더 `async`와 유사하다.
-
-즉 발행자인 `Mono`, `Flux`로부터 비동기적으로 객체를 가져온다고 생각하면 쉽다.
-
-해당 코드를 따라가다보면 `suspendCancellableCoroutine`를 활용하고 있는데 방식은 `pub/sub`방식으로 처리하고 있는 것을 알 수 있다.
-
-결국 마치 `jpa`나 `queryDSL`처럼 쿼리 이후 가져오는 타입에 따라 `fetch`, `fetchOne`처럼 사용하고 있기 때문에 크게 어려움이 없다.
-
-이제는 서비스 레이어의 코드를 수정해 보자.
-
-# ReadMusicianService 수정
-
-```kotlin
-@Service
-class ReadMusicianService(
-    private val musicianRepository: MusicianRepository,
-) {
-    fun musicians(pageable: Pageable) = musicianRepository.findAllBy(pageable)
-    suspend fun musicianById(id: Long) = musicianRepository.findById(id)
-    suspend fun musicianByIdOrThrow(id: Long, message: String? = null) = musicianRepository.findByIdOrThrow(id, message)
-    suspend fun totalCount() = musicianRepository.count()
-    fun musiciansByQuery(match: Query) = musicianRepository.musiciansByQuery(match)
-    suspend fun totalCountByQuery(match: Query) = musicianRepository.totalCountByQuery(match)
-    suspend fun musicianWithRecords(id: Long) = musicianRepository.musicianWithRecords(id)
-}
-```
-기존과의 차이점은 `suspend`가 붙는 다는 점과 `Mono`나 `Flux`아 아닌 객체를 다룰 수 있게 된다는 점이다.
-
-다만 `Pageable`을 사용한 `findAllBy(pageable: Pageable)`함수의 경우에는 `Flow<T>`로 받는다.
-
-이때는 `suspend`가 붙지 않아도 된다.
-
-여기서 `toList()`를 통해 `Iterable<T>`형식으로 변환이 가능하지만 `domain`패키지의 경우에는 이대로 사용한다.
-
-`useCase`작성시 `toList()`로 처리할지 또는 그냥 `Flow<T>`로 컨트롤러를 통해 클라이언트로 보내줄지 결정하도록 하자.
-
-이제부터 이것이 잘 작동하는지 테스트 코드를 작성해 보자.
-
-앞서 우리는 이 테스트를 위해서 그레이들에 `testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")`을 설정했다.
-
-최신 버전은 이 `README.md`이 작성된 시점에 `1.7.1`버전이 최신 버전이다.
-
-여기서 제공하는 `runTest{}`을 통해서 테스팅을 진행한다.
-
-```kotlin
-@SpringBootTest
-class ReadMusicianServiceTest @Autowired constructor(
-    private val read: ReadMusicianService,
-) {
-
-    @Test
-    @DisplayName("fetch musician by id")
-    fun musicianByIdTEST() = runTest{
-        // given
-        val id = 1L
-
-        // when
-        val selected = read.musicianById(id)
-
-        // then
-        assertThat(selected!!.name).isEqualTo("Charlie Parker")
-    }
-
-    @Test
-    @DisplayName("fetch musician by id or throw")
-    fun musicianByIdOrThrowTEST() = runTest{
-        // given
-        //val id = 1L
-        val id = 1111L
-
-        // when
-        val selected = read.musicianByIdOrThrow(id)
-
-        // then
-        assertThat(selected!!.name).isEqualTo("Charlie Parker")
-
-    }
-
-    @Test
-    @DisplayName("fetch musicians pagination")
-    fun musiciansTEST() = runTest{
-        // given
-        val pageable = PageRequest.of(0, 3)
-
-        // when
-        val musicians = read.musicians(pageable)
-                            .toList()
-                            .map { it.name }
-        // then
-        assertThat(musicians.size).isEqualTo(3)
-        assertThat(musicians[0]).isEqualTo("Charlie Parker")
-    }
-
-    @Test
-    @DisplayName("total musician count test")
-    fun totalCountTEST() = runTest{
-        // when
-        val count = read.totalCount()
-
-        // then
-        assertThat(count).isEqualTo(10)
-    }
-
-    @Test
-    @DisplayName("musicians list by query test")
-    fun musiciansByQueryTEST() = runTest{
-
-        val list = emptyList<Criteria>()
-
-        // given
-        val match = query(Criteria.from(list)).limit(2).offset(0)
-
-        // when
-        val musicians: List<String> = read.musiciansByQuery(match)
-                                          .toList()
-                                          .map { it.name }
-
-        // then
-        assertThat(musicians.size).isEqualTo(2)
-
-    }
-
-    @Test
-    @DisplayName("total musician count by query test")
-    fun totalCountByQueryTEST() = runTest{
-        // given
-        val match = query(where("genre").isEqual("JAZZ"))
-
-        // when
-        val count = read.totalCountByQuery(match)
-
-        // then
-        assertThat(count).isEqualTo(4)
-    }
-
-    @Test
-    @DisplayName("musician with records test")
-    fun musicianWithRecordsTEST() = runTest{
-        // given
-        val id = 10L
-
-        // when
-        val musician = read.musicianWithRecords(id) ?: notFound()
-
-        // then
-        assertThat(musician.name).isEqualTo("스윙스")
-        assertThat(musician.records!!.size).isEqualTo(5)
-
-    }
-
-}
-
-```
-마치 일반 `Web MVC`을 사용할 때와 크게 다르지 않다는 것을 눈치챘을 것이다.
-
-이제는 이것을 기반으로 `useCase`를 작성해 보자.
-
-# ReadMusicianUseCase 수정
-
-이제부터는 대충 느낌이 올것이다.
-
-```kotlin
-@Service
-class ReadMusicianUseCase(
-    private val read: ReadMusicianService,
-) {
-
-    fun musicianById(id: Long): Mono<Musician> {
-        return read.musicianByIdOrThrow(id)
-    }
-
-    fun musiciansByQuery(queryPage: QueryPage, matrixVariable: MultiValueMap<String, Any>): Mono<Page<Musician>> {
-        val match = createQuery(matrixVariable)
-        return read.musiciansByQuery(queryPage.pagination(match))
-                   .collectList()
-                   .zipWith(read.totalCountByQuery(match))
-                   .map { tuple -> PageImpl(tuple.t1, queryPage.fromPageable(), tuple.t2) }
-    }
-
-}
-```
-위 기존의 코드를 바꿔보도록 하자.
-
-하지만 `musiciansByQuery`에서 사용하고 있는 `zipWith`는 `Mono`에서 제공하는 `API`로 일반적인 코틀린의 컬렉션 함수에서는 존재하지 않는다.
-
-게다가 코틀린의 컬렉션 함수나 자바의 `Stream API`에서 제공하는 `zip`나 `zipWithNext`는 `zipWith`와는 작동 방식이 다르다.
-
-우리는 이것을 이런 방식으로 처리하고 싶은 욕망이 생긴다.
-
-따라서 확장 함수를 통해서 이것을 정의해서 사용하자.
-
-이 방식에 특화된 커스텀 확장 함수를 하나 작성하자.
-
-`CustomExtensions.kt`
-```kotlin
-fun <T, R> Iterable<T>.countZipWith(other: R): Pair<Iterable<T>, R> {
-    return this to other
-}
-
-fun <T, R, S> Pair<Iterable<T>, R>.map(transformer: (Pair<Iterable<T>, R>) -> S): S {
-    return transformer(this)
-}
-```
-`countZipWith`는 페이징 처리를 위해서는 리스트 정보와 전체 카운트 정보를 통해 처리하고 자 할 테니 `Pair`로 반환한다.
-
-따라서 `Pair`에 대해 확장 함수도 같이 작성을 해줘야 한다.
-
-아래는 이것을 적용한 최종 `ReadMusicianUseCase`이다.
-
-```kotlin
-@Service
-class ReadMusicianUseCase(
-    private val read: ReadMusicianService,
-) {
-
-    suspend fun musicianById(id: Long): Musician {
-        return read.musicianByIdOrThrow(id)
-    }
-
-    suspend fun musiciansByQuery(queryPage: QueryPage, matrixVariable: MultiValueMap<String, Any>): Page<Musician> {
-        val match = createQuery(matrixVariable)
-        return read.musiciansByQuery(queryPage.pagination(match))
-                   .toList()
-                   .countZipWith(read.totalCountByQuery(match))
-                   .map { ( musicians, count) -> PageImpl(musicians.toList(), queryPage.fromPageable(), count)}
-    }
-
-}
-```
-테스트 코드는 기존과 크게 다르지 않기 때문에 완료된 테스트 코드는 확인해 보면 될 듯 싶다.
-
-# WriteMusicianService 수정
-
-```kotlin
-@Service
-class WriteMusicianService(
-    private val musicianRepository: MusicianRepository,
-) {
-    fun create(musician: Musician): Mono<Musician> {
-        return musicianRepository.save(musician)
-    }
-    fun update(musician: Musician, assignments: MutableMap<SqlIdentifier, Any>): Mono<Musician> {
-        return musicianRepository.updateMusician(musician, assignments)
-    }
-}
-```
-이제는 너무 익숙해지기 시작한다.
-
-```kotlin
 @Service
 class WriteMusicianService(
     private val musicianRepository: MusicianRepository,
@@ -536,42 +364,71 @@ class WriteMusicianService(
     suspend fun create(musician: Musician): Musician {
         return musicianRepository.save(musician)
     }
-    suspend fun update(musician: Musician, assignments: MutableMap<SqlIdentifier, Any>): Musician {
-        return musicianRepository.updateMusician(musician, assignments)
+    suspend fun update(musicianId: Long, assignments: MutableMap<Field<*>, Any>): Int {
+        return musicianRepository.updateMusician(musicianId, assignments)
     }
 }
 ```
-당연히 우리는 테스트 코드를 수행해야 한다.
-
-이 때 `rollBack`은 기존의 코드를 좀 수정해야 한다.
+일반적으로 `jooQ`의 업데이트 문법은 다음과 같다.
 
 ```kotlin
-@Component
-class Transaction (
-    transactionalOperator: TransactionalOperator
-) {
-    init {
-        Companion.transactionalOperator = transactionalOperator
-    }
-    companion object {
-        lateinit var transactionalOperator: TransactionalOperator
-        suspend fun <T, S> withRollback(value: T, receiver: suspend (T) -> S): S {
-            return transactionalOperator.executeAndAwait {
-                it.setRollbackOnly()
-                receiver(value)
-            }
-        }
+// 1 or 0
+return query.update(musician)
+            .set(assignments)
+            .where(musician.ID.`equal`(musicianId))
+            .execute()
+```
+여기서 `set`의 경우에는 `key-value`형식으로 `Field`타입으로 감싸진 컬럼과 업데이트 정보로 담아서 보내도 된다.
 
-        suspend fun withRollback(receiver: suspend () -> Unit) {
-            return transactionalOperator.executeAndAwait {
-                it.setRollbackOnly()
-                receiver()
-            }
-        }
-    }
+또는
+
+```
+## field로 직접적으로 컬럼을 명시해서 사용하는 방법
+query.update(musician)
+     .set(field("name"), "Charlie PPPPP")
+     .set(field("genre"), "HIPHOP")
+     .where(musician.ID.`equal`(musicianId))
+
+## field로 직접적으로 컬럼을 명시해서 사용하는 방법
+query.update(musician)
+     .set(musician.NAME, "Charlie PPPPP")
+     .set(musician.GENRE, "HIPHOP")
+     .where(musician.ID.`equal`(musicianId))
+```
+이 방법으로 처리해도 상관없다.
+
+아무튼 리액티브 방식이 아닌 기존의 `dsl`방식에서 사용하는 `execute`나 `fetch`는 블록킹이 발생한다.
+
+따라서 자바나 코루틴을 사용하는 방식이 아니면 아래에 서술한 `Flux.from`을 감싸서 사용해야 한다.
+
+어째든 어떤 방식을 사용해도 유연하게 작업을 하기 쉬워진다. 
+
+물론 타입 안정성을 가져가는 것은 덤이다.
+
+하지만 여기서는 기존 방식을 그대로 유지하는 선에서 사용해 보고자 한다.
+
+어째든 [reactive-sql-with-jooq-3-15-and-r2dbc](https://blog.jooq.org/reactive-sql-with-jooq-3-15-and-r2dbc/)의 코드를 보면
+
+```kotlin
+fun example() {
+    Flux.from(
+        query.update(musician)
+             .set(assignments)
+             .where(musician.ID.`equal`(musicianId))
+    )
 }
 ```
-이것을 이용해 롤백 테스트를 진행하자.
+처럼 `Flux.from`을 활용해서 감싼 이후 `awaitSingle`을 사용해서 가져오는 방법을 택할 수도 있다.
+
+이 방식으로 반환값이 `0`이라면 업데이트가 수행되지 않았다는 것을 알 수 있다.
+
+`PreparedStatement`사용시 이 반환값의 의미가 뭔지 아시는 분은 아시겠지만 `1`인 경우에는 업데이트에 대한 영향을 받은 레코드의 수다.
+
+그렇다는 것은 `0`이라면 업데이트가 수행되지 않았다고 볼 수 있다. 
+
+즉 조건절에서 일치하는 로우가 없었기 때문이라고 보는게 맞다.
+
+테스트 코드를 한번 실행해 보자.
 
 ```kotlin
 @SpringBootTest
@@ -581,124 +438,767 @@ class WriteMusicianServiceTest @Autowired constructor(
 ) {
 
     @Test
-    @DisplayName("musician create test")
-    fun createMusicianTEST() = runTest {
-        // given
-        val createdMusician = Musician(name = "taasaaa", genre = Genre.HIPHOP)
-        
-        // when
-        val musician = Transaction.withRollback(createdMusician) { 
-            write.create(it) 
-        }
-        
-        // then
-        assertThat(musician.id).isGreaterThan(0)
-    }
-
-    @Test
     @DisplayName("musician update using builder test")
     fun updateMusicianTEST() = runTest {
         // given
         val id = 1L
-        
-        val command = UpdateMusician(name = "Charlie Parker", genre = "POP")
-        
-        val target = read.musicianByIdOrThrow(1)
-        
-        val (musician, assignments) = command.createAssignments(target)
+        val assignments = mutableMapOf<Field<*>, Any>()
+        //assignments[field("name")] = "Charlie Parker"
+        //assignments[field("genre")] = Genre.JAZZ.name
+        assignments[JMusician.MUSICIAN.NAME] = "Charlie Parker"
+        assignments[JMusician.MUSICIAN.GENRE] = Genre.JAZZ.name
         
         // when
-        val update = Transaction.withRollback(id) {
-            write.update(musician, assignments)
-            read.musicianById(id)!!
-        }
+        val update = write.update(1, assignments)
         
         // then
-        assertThat(update.genre).isEqualTo(Genre.POP)
+        assertThat(update).isEqualTo(1)
+    }
+}
+```
+맵을 생성할 때 키 값은 주석처리된 부분처럼 `jooQ`가 생성한 엔티티를 통해서도 가능하다.
+
+설정이 잘 되었다면 업데이트 쿼리가 나가고 요상한 `jooQ`이모지가 뜨면서 `Thank you for using jOOQ 3.18.5`메세지를 보게 된다.
+
+이제는 컨트롤러에서 받는 `UpdateMusician`는 다음과 같이 변경해야 한다.
+
+```kotlin
+data class UpdateMusician(
+    val name: String? = null,
+    @field:EnumCheck(enumClazz = Genre::class, permitNull = true, message = "genre 필드는 POP, ROCK, HIPHOP, JAZZ, CLASSIC, WORLDMUSIC, ETC 만 가능합니다.")
+    val genre: String? = null,
+) {
+    fun createAssignments(): MutableMap<Field<*>, Any> {
+        val assignments = mutableMapOf<Field<*>, Any>()
+        name?.let {
+            isParamBlankThrow(it)
+            assignments[JMusician.MUSICIAN.NAME] = it
+        }
+        genre?.let {
+            assignments[JMusician.MUSICIAN.GENRE] = it
+        }
+        if(assignments.isEmpty()) {
+            throw BadParameterException("업데이트 정보가 누락되었습니다. [name, genre] 정보를 확인하세요.")
+        }
+        return assignments
+    }
+}
+```
+어짜피 `1`일 텐데 앞서 먼저 넘어온 `id`으로 뮤지션의 정보를 가져온 이후 업데이트 처리를 하기 때문에 그대로 간다.
+
+만일 이런 방식으로 하지 않는다면 업데이트가 제대로 수행되었는지 이 값을 통해서 후처리를 할 수 있다.
+
+이것은 프로젝트의 성향 또는 요구 사항에 맞춰가는 부분이기 때문에 그에 맞는 방식을 취하는 것 역시 개발자의 몫일 것이다.
+
+이 프로젝트는 기존의 것을 유지하는 선에서의 변경점을 찾을 것이다. 
+
+하지만 다양한 방법이 있기 때문에 프로젝트에 맞춰서 작업할 수 있도록 알아두면 좋다.
+
+`Write`부분에서 커스텀 쿼리는 `updateMusician`만 사용하기 때문에 기존의 것은 그대로 두도록 하자.
+
+이제는 `CustomMusicianRepository`에 있는 기존 함수들을 수정해 보자.
+
+```kotlin
+interface CustomMusicianRepository {
+    suspend fun updateMusician(id: Long, assignments: MutableMap<Field<*>, Any>): Int
+    fun musiciansByQuery(match: Query): Flow<Musician>
+    suspend fun totalCountByQuery(match: Query): Long
+    suspend fun musicianWithRecords(id: Long): Musician?
+}
+```
+하지만 기존에 작업한 함수들의 파라미터 부분들이 달라질 것이기 때문에 이 부분도 이제는 변경이 되어야 한다.
+
+## 조건이 있는 totalCountByQuery 수정
+
+이 방법은 `QueryDsl`과 유사한 부분이 있는데 먼저 `Where`조건에 대한 문법을 먼저 확인해 보자.
+
+```kotlin
+override suspend fun totalCountByQuery(): Long {
+    val musician = JMusician.MUSICIAN
+    val query =  query.selectCount()
+                      .from(musician)
+                      .where(
+                            musician.GENRE.eq("HIPHOP").and(
+                                field("id").ge(11)
+                            )
+                      )
+    return query.awaitSingle().value1().toLong()
+}
+
+override suspend fun totalCountByQuery(): Long {
+    val musician = JMusician.MUSICIAN
+    val query =  query.selectCount()
+                      .from(musician)
+                      .where(musician.GENRE.eq("HIPHOP"))
+                      .and(field("id").ge(11))
+    return query.awaitSingle().value1().toLong()
+}
+```
+위 두가지 방식은 결과가 똑같다. 
+
+기존의 우리가 작업한 방식은 `R2DBC`의 `Query`객체에 조건을 담아서 보내줬다.
+
+하지만 이 방식을 사용할 때는 다르게 보내야 한다.
+
+```
+musician.ID.eq(11) or field("id").ge(11)
+```
+이 코드는 `org.jooq.Condition`을 반환한다. 
+
+이것을 이용해 보자.
+
+`ConditionType`은 다음과 같이 변경한다.
+
+```kotlin
+enum class ConditionType(
+    val code: String,
+    private val condition: (WhereCondition) -> Condition
+) {
+    LTE("lte", { field(it.column).lessOrEqual(it.value) }),
+    LT("lt", { field(it.column).lessThan(it.value) }),
+    GTE("gte", { field(it.column).greaterOrEqual(it.value) }),
+    GT("gt", { field(it.column).greaterThan(it.value) }),
+    EQ("eq", { field(it.column).eq(it.value) }),
+    LIKE("like", { field(it.column).like("%${it.value}%") });
+
+    fun getCondition(condition: WhereCondition): Condition {
+        return condition(condition)
+    }
+
+    companion object {
+        /**
+         * null이면 EQ를 던진다.
+         * @param code
+         * @return ConditionType
+         */
+        fun of(code: String): ConditionType = values().firstOrNull { conditionType-> conditionType.code.equals(code, ignoreCase = true) }
+            ?: EQ
+    }
+}
+```
+
+`CriteriaBuilder`를 이 `Condtion`을 담은 리스트로 반환하도록 변경해 보자.
+
+```kotlin
+fun createQuery(matrixVariable: MultiValueMap<String, Any>): List<Condition> {
+    if(matrixVariable.containsKey("all")) {
+        return emptyList()
+    }
+    val list = matrixVariable.map { (key, value) ->
+        try {
+            ConditionType.of(value[0].toString()).getCondition(WhereCondition.from(key, value[1]))
+        } catch(e: Exception) {
+            throw BadParameterException("누락된 정보가 있습니다. 확인하세요.")
+        }
+    }
+    return list
+}
+```
+
+최종적으로 
+
+````kotlin
+override suspend fun totalCountByQuery(conditions: List<Condition>): Long {
+    val musician = JMusician.MUSICIAN
+    val query = query.selectCount()
+                     .from(musician)
+                     .where()
+    if(conditions.isNotEmpty()) {
+        conditions.forEach {
+            query.and(it)
+        }
+    }
+    return query.awaitSingle().value1().toLong()
+}
+````
+
+테스트 코드를 작성해서 테스트 해보자.
+
+```kotlin
+@Test
+@DisplayName("total musician count by query test")
+fun totalCountByQueryTEST() = runTest{
+    // given
+    val multiValueMap = LinkedMultiValueMap<String, Any>()
+    multiValueMap.add("genre", "like")
+    multiValueMap.add("genre", "HIPH")
+    println(multiValueMap)
+    val conditions = createQuery(multiValueMap)
+    
+    // when
+    val count = read.totalCountByQuery(conditions)
+    
+    // then
+    assertThat(count).isEqualTo(10)
+}
+```
+실제 결과는 다음과 같이
+
+```
+INFO 12208 --- [-netty-thread-2] org.jooq.Constants                       : 
+                                      
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@  @@        @@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@        @@@@@@@@@@
+@@@@@@@@@@@@@@@@  @@  @@    @@@@@@@@@@
+@@@@@@@@@@  @@@@  @@  @@    @@@@@@@@@@
+@@@@@@@@@@        @@        @@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@        @@        @@@@@@@@@@
+@@@@@@@@@@    @@  @@  @@@@  @@@@@@@@@@
+@@@@@@@@@@    @@  @@  @@@@  @@@@@@@@@@
+@@@@@@@@@@        @@  @  @  @@@@@@@@@@
+@@@@@@@@@@        @@        @@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@  @@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  Thank you for using jOOQ 3.18.5
+                                      
+INFO 12208 --- [-netty-thread-2] org.jooq.Constants                       : 
+
+jOOQ tip of the day: Views (and table valued functions) are the most underrated SQL feature! They work very well together with jOOQ and jOOQ's code generator! https://www.jooq.org/doc/latest/manual/code-generation/codegen-advanced/codegen-config-database/codegen-database-table-valued-functions/
+
+INFO 12208 --- [-netty-thread-2] i.b.m.c.listener.QueryLoggingListener    : Result Row : +-----+
+|count|
++-----+
+|   10|
++-----+
+
+INFO 12208 --- [-netty-thread-2] i.b.m.c.listener.QueryLoggingListener    : ConnectionId: 10 
+Query:["select count(*) from `musician` where genre like ?"] 
+Bindings:[(%HIPH%)] 
+Result Count : 1
+```
+다음과 같이 나오게 된다.
+
+# jooQ Column 체크
+`jooQ`가 생성하는 엔티티 정보를 통해서 해당 컬럼의 정보를 얻을 수 있다.
+
+예를 들면
+
+```kotlin
+val musician = JMusician.MUSICIAN
+musician.field("name")
+```
+만일 저 키 값에 해당하는 컬럼이 없다면 `null`을 반환한다.
+
+이것을 이용해서 `CriteriaBuilder`의 `createQuery`를 다음과 같이 수정을 하자.
+
+```kotlin
+fun <T: TableImpl<*>> createQuery(matrixVariable: MultiValueMap<String, Any>, jooqEntity: T): List<Condition> {
+    if(matrixVariable.containsKey("all")) {
+        return emptyList()
+    }
+    val conditions = matrixVariable.map { (key, value) ->
+        try {
+            val column = jooqEntity.field(key)?.let { it as TableField<*, Any?> } ?: throw BadParameterException("컬럼 [${key}]은 존재하지 않는 컬럼입니다. 확인하세요.")
+            ConditionType.of(value[0].toString()).getCondition(WhereCondition.from(column, value[1]))
+        } catch(e: Exception) {
+            when(e) {
+                is BadParameterException -> throw BadParameterException(e.message)
+                else -> throw BadParameterException("누락된 정보가 있습니다. 확인하세요.")
+            }
+        }
+    }
+    return conditions
+}
+```
+`jooQ`관련 스택오버플로우의 내용을 보면 다음과 같이 `Field<*>`를 `as`를 통해서 `TableFiled<*, Any?>`로 캐스팅이 가능한 것을 확인했다.
+
+만일 `jooq`의 엔티티에 정의된 컬럼명이 아니라면 `BadParameterException`을 던질 것이다.
+
+이제는 `WhereCondition`과 `ConditionType`을 다시 수정하자.
+
+```kotlin
+data class WhereCondition(
+    val column: TableField<*, Any?>,
+    val value: Any,
+) {
+    companion object {
+        fun from(key: TableField<*, Any?>, value: Any): WhereCondition {
+            return WhereCondition(
+                column = key,
+                value = value
+            )
+        }
+    }
+}
+
+enum class ConditionType(
+    val code: String,
+    private val condition: (WhereCondition) -> Condition
+) {
+    LTE("lte", { it.column.lessOrEqual(it.value) }),
+    LT("lt", { it.column.lessThan(it.value) }),
+    GTE("gte", { it.column.greaterOrEqual(it.value) }),
+    GT("gt", { it.column.greaterThan(it.value) }),
+    EQ("eq", { it.column.eq(it.value) }),
+    LIKE("like", { it.column.like("%${it.value}%") });
+
+    fun getCondition(condition: WhereCondition): Condition {
+        return condition(condition)
+    }
+
+    companion object {
+        /**
+         * null이면 EQ를 던진다.
+         * @param code
+         * @return ConditionType
+         */
+        fun of(code: String): ConditionType = values().firstOrNull { conditionType-> conditionType.code.equals(code, ignoreCase = true) }
+            ?: EQ
     }
 
 }
 ```
+상당히 어거지처럼 보이긴 한다. 
 
-# WriteMusicianUseCase 수정 및 MusicianController 완성
+하지만 이런 방식을 통해서 리퀘스트로 넘어온 정보를 체크하는 방식을 채택한다면 베스트라는 생각이 든다.
+
+물론 이런 방식보다는 구현체에서 명확하게 처리하는게 차라리 나을 수 있지만 이런 방식도 가능하다는 것을 알리고 싶었다.
+
+이제는 테스트 코드를 다시 한번 손을 보자.
+
+```kotlin
+@Test
+@DisplayName("total musician count by query test")
+fun totalCountByQueryTEST() = runTest{
+    // given
+    val multiValueMap = LinkedMultiValueMap<String, Any>()
+    multiValueMap.add("genre", "like")
+    multiValueMap.add("genre", "HIPHOP")
+    println(multiValueMap)
+    val conditions = createQuery(multiValueMap, JMusician.MUSICIAN)
+
+    // when
+    val count = read.totalCountByQuery(conditions)
+
+    // then
+    assertThat(count).isEqualTo(10)
+}
+```
+이 때 위에 기존 쿼리와 비교를 해보자면
+
+```
+# 변경 전
+"select count(*) from `musician` where genre like ?"
+
+# 변경 후
+"select count(*) from `musician` where `musician`.`genre` like ?"
+```
+차이가 보이는 것을 알 수 있다.
+
+## 정렬과 페이징 처리
+
+`queryDSL`을 해보신 분이라면 흡사한 걸 알 수 있다.
+
+`orderBy`함수는 단일 정보, 또는 `vararg` 그리고 `Collection`타입을 받을 수 있다.
+
+이런 특징을 사용하면 되고 `limit`, `offset`을 사용할 수 있다.
+
+이제는 카운트가 아닌 `musiciansByQuery`부분을 수정해 보자.
+
+이 때는 `queyrDSL`처럼 프로젝션 정보를 통해 `dto`로 변환해주는 `API`를 제공하지 않는다.
+
+대신 프로젝션 정보를 `Record`객체로 받아와서 이것을 `POJO`, 우리에게는 이미 만들어진 엔티티로 매핑하도록 한다.
+
+이 때 유의해야 할 것은 생성자의 정보와 위치가 일치해야 한다.
+
+다음 아래는 여러분들도 확인할 수 있을 텐데
+
+```kotlin
+@Suppress("UNCHECKED_CAST")
+open class JMusicianRecord() : UpdatableRecordImpl<JMusicianRecord>(JMusician.MUSICIAN), Record5<Long?, String?, String?, LocalDateTime?, LocalDateTime?> {
+
+    open var id: Long?
+        set(value): Unit = set(0, value)
+        get(): Long? = get(0) as Long?
+
+    open var name: String?
+        set(value): Unit = set(1, value)
+        get(): String? = get(1) as String?
+
+    open var genre: String?
+        set(value): Unit = set(2, value)
+        get(): String? = get(2) as String?
+
+    open var createdAt: LocalDateTime?
+        set(value): Unit = set(3, value)
+        get(): LocalDateTime? = get(3) as LocalDateTime?
+
+    open var updatedAt: LocalDateTime?
+        set(value): Unit = set(4, value)
+        get(): LocalDateTime? = get(4) as LocalDateTime?
+
+    // -------------------------------------------------------------------------
+    // Primary key information
+    // -------------------------------------------------------------------------
+
+    override fun key(): Record1<Long?> = super.key() as Record1<Long?>
+
+    // -------------------------------------------------------------------------
+    // Record5 type implementation
+    // -------------------------------------------------------------------------
+
+    override fun fieldsRow(): Row5<Long?, String?, String?, LocalDateTime?, LocalDateTime?> = super.fieldsRow() as Row5<Long?, String?, String?, LocalDateTime?, LocalDateTime?>
+    override fun valuesRow(): Row5<Long?, String?, String?, LocalDateTime?, LocalDateTime?> = super.valuesRow() as Row5<Long?, String?, String?, LocalDateTime?, LocalDateTime?>
+    override fun field1(): Field<Long?> = JMusician.MUSICIAN.ID
+    override fun field2(): Field<String?> = JMusician.MUSICIAN.NAME
+    override fun field3(): Field<String?> = JMusician.MUSICIAN.GENRE
+    override fun field4(): Field<LocalDateTime?> = JMusician.MUSICIAN.CREATED_AT
+    override fun field5(): Field<LocalDateTime?> = JMusician.MUSICIAN.UPDATED_AT
+    override fun component1(): Long? = id
+    override fun component2(): String? = name
+    override fun component3(): String? = genre
+    override fun component4(): LocalDateTime? = createdAt
+    override fun component5(): LocalDateTime? = updatedAt
+    override fun value1(): Long? = id
+    override fun value2(): String? = name
+    override fun value3(): String? = genre
+    override fun value4(): LocalDateTime? = createdAt
+    override fun value5(): LocalDateTime? = updatedAt
+
+    override fun value1(value: Long?): JMusicianRecord {
+        set(0, value)
+        return this
+    }
+
+    override fun value2(value: String?): JMusicianRecord {
+        set(1, value)
+        return this
+    }
+
+    override fun value3(value: String?): JMusicianRecord {
+        set(2, value)
+        return this
+    }
+
+    override fun value4(value: LocalDateTime?): JMusicianRecord {
+        set(3, value)
+        return this
+    }
+
+    override fun value5(value: LocalDateTime?): JMusicianRecord {
+        set(4, value)
+        return this
+    }
+
+    override fun values(value1: Long?, value2: String?, value3: String?, value4: LocalDateTime?, value5: LocalDateTime?): JMusicianRecord {
+        this.value1(value1)
+        this.value2(value2)
+        this.value3(value3)
+        this.value4(value4)
+        this.value5(value5)
+        return this
+    }
+
+    /**
+     * Create a detached, initialised JMusicianRecord
+     */
+    constructor(id: Long? = null, name: String? = null, genre: String? = null, createdAt: LocalDateTime? = null, updatedAt: LocalDateTime? = null): this() {
+        this.id = id
+        this.name = name
+        this.genre = genre
+        this.createdAt = createdAt
+        this.updatedAt = updatedAt
+        resetChangedOnNotNull()
+    }
+}
+```
+여기를 보면 `Record5<Long?, String?, String?, LocalDateTime?, LocalDateTime?>`이런 부분을 알 수 있다.
+
+즉, 이 생성자의 위치와 정보와 우리가 매핑하고자 하는 엔티티의 생성자의 위치가 같아야 제대로 된 정보를 매핑할 수 있다.
+
+아래는 예제를 위해 수정한 `musiciansByQuery`함수이다.
+
+```kotlin
+override fun musiciansByQuery(conditions: List<Condition>): Flow<Musician> {
+    val musician = JMusician.MUSICIAN
+    val query = query.select(asterisk())
+                     .from(musician)
+                     .where()
+    if(conditions.isNotEmpty()) {
+        conditions.forEach { query.and(it) }
+    }
+    
+    val list = listOf(musician.ID.asc(), musician.NAME.asc())
+    
+    query.orderBy(list)
+         .limit(10)
+         .offset(0)
+    return query.asFlow()
+                .map { it.into(Musician::class.java) }
+}
+```
+지금까지는 `List<Condition>`부분만 파라미터로 받았지만 예제로 만든 코드에서 정렬, 페이징 정보를 받아서 동적으로 처리하도록 작업해야 한다.
+
+그렇기 위해서는 `QueryPage`를 변경해야 한다.
+
+```kotlin
+data class QueryPage(
+    @field:Min(1, message = "페이지 정보는 0보다 커야 합니다.")
+    val page: Int? = 1,
+    @field:Min(1, message = "사이즈 정보는 0보다 커야 합니다.")
+    val size: Int? = 10,
+    val column: String? = null,
+    @field:EnumCheck(enumClazz = Sort.Direction::class, permitNull = true, message = "sort 필드는 DESC, ASC 만 가능합니다.")
+    val sort: String? = null,
+) {
+    private val offset : Int
+        get() = this.page!! - 1
+
+    private val limit  : Int
+        get() = this.size!!
+
+    val currentPage: Int
+        get() = this.page!!
+
+    fun fromPageable(): PageRequest {
+        return PageRequest.of(offset, limit)
+    }
+    
+    fun <T: TableImpl<*>> pagination(jooqEntity: T): Pair<List<SortField<*>>, PageRequest> {
+        val sortFields = if (column != null && sort != null) {
+            val field = jooqEntity.field(column)?.let { it as TableField<*, Any?> } ?: throw BadParameterException("컬럼 [${column}]은 존재하지 않는 컬럼입니다. 확인하세요.")
+            when (Sort.Direction.valueOf(sort.uppercase())) {
+                Sort.Direction.DESC -> {
+                    listOf(field.desc())
+                }
+                else -> {listOf(field.asc())}
+            }
+        } else {
+            emptyList()
+        }
+        return sortFields to PageRequest.of(offset, limit)
+    }
+
+}
+```
+이에 맞추서 파라미터를 맞춰주자.
 
 ```kotlin
 @Service
-class WriteMusicianUseCase(
-    private val read: ReadMusicianService,
-    private val write: WriteMusicianService,
+class ReadMusicianService(
+    private val musicianRepository: MusicianRepository,
 ) {
+    fun musicians(pageable: Pageable) = musicianRepository.findAllBy(pageable)
+    fun musiciansByQuery(conditions: List<Condition>, pagination: Pair<List<SortField<*>>, PageRequest>) =
+        musicianRepository.musiciansByQuery(conditions, pagination)
 
-    suspend fun insert(command: CreateMusician): Musician {
-        val created = Musician(name = command.name, genre = Genre.valueOf(command.genre))
-        return write.create(created)
+    suspend fun musicianById(id: Long) = musicianRepository.findById(id)
+    suspend fun musicianByIdOrThrow(id: Long, message: String? = null) = musicianRepository.findByIdOrThrow(id, message)
+    suspend fun totalCount() = musicianRepository.count()
+    suspend fun totalCountByQuery(conditions: List<Condition>) = musicianRepository.totalCountByQuery(conditions)
+}
+
+interface CustomMusicianRepository {
+    suspend fun updateMusician(musicianId: Long, assignments: MutableMap<Field<*>, Any>): Int
+    fun musiciansByQuery(conditions: List<Condition>, pagination: Pair<List<SortField<*>>, PageRequest>): Flow<Musician>
+    suspend fun totalCountByQuery(conditions: List<Condition>): Long
+}
+class CustomMusicianRepositoryImpl(
+    private val query: DSLContext,
+): CustomMusicianRepository {
+
+    override suspend fun updateMusician(musicianId: Long, assignments: MutableMap<Field<*>, Any>): Int {
+        val musician = JMusician.MUSICIAN
+        return query.update(musician)
+                    .set(assignments)
+                    .where(musician.ID.`equal`(musicianId)).awaitSingle()
     }
 
-    suspend fun update(id: Long, command: UpdateMusician): Musician {
-        val selected = read.musicianByIdOrThrow(id)
-        val (musician, assignments) = command.createAssignments(selected)
-        write.update(musician, assignments)
-        return read.musicianById(id)!!
+    override fun musiciansByQuery(conditions: List<Condition>, pagination: Pair<List<SortField<*>>, PageRequest>): Flow<Musician> {
+        val musician = JMusician.MUSICIAN
+        val query = query.select(asterisk())
+                         .from(musician)
+                         .where()
+        if(conditions.isNotEmpty()) {
+            conditions.forEach { query.and(it) }
+        }
+
+        if(pagination.first.isNotEmpty()) {
+            query.orderBy(pagination.first)
+        }
+        query.limit(pagination.second.pageSize)
+             .offset(pagination.second.offset)
+        return query.asFlow()
+                    .map { it.into(Musician::class.java) }
+    }
+
+    override suspend fun totalCountByQuery(conditions: List<Condition>): Long {
+        val musician = JMusician.MUSICIAN
+        val query = query.selectCount()
+                         .from(musician)
+                         .where()
+        if(conditions.isNotEmpty()) {
+            conditions.forEach {
+                query.and(it)
+            }
+        }
+        return query.awaitSingle().value1().toLong()
     }
 
 }
 
-@RestController
-@RequestMapping("/api/v1/musicians")
-class MusicianController(
-    private val readMusicianUseCase: ReadMusicianUseCase,
-    private val writeMusicianUseCase: WriteMusicianUseCase,
-) {
+```
+테스트 코드도 이에 맞춰서 수정하자.
 
-    @GetMapping("/query/{queryCondition}")
-    @ResponseStatus(HttpStatus.OK)
-    suspend fun fetchMusicians(
-        @Valid queryPage: QueryPage,
-        @MatrixVariable(pathVar = "queryCondition", required = false) matrixVariable: MultiValueMap<String, Any>
-    ): Page<Musician> {
-        return readMusicianUseCase.musiciansByQuery(queryPage, matrixVariable)
-    }
+```kotlin
+@Test
+@DisplayName("musicians list by query test")
+fun musiciansByQueryTEST() = runTest{
+    // given
+    val multiValueMap = LinkedMultiValueMap<String, Any>()
+    multiValueMap.add("genre", "like")
+    multiValueMap.add("genre", "HIP")
+    println(multiValueMap)
+    val conditions = createQuery(multiValueMap, JMusician.MUSICIAN)
 
-    @GetMapping("/{id}")
-    @ResponseStatus(HttpStatus.OK)
-    suspend fun fetchMusician(@PathVariable("id") id: Long): Musician {
-        return readMusicianUseCase.musicianById(id)
-    }
+    //val queryPage = QueryPage(page = 1, size = 5, column = "id", sort = "DESC")
+    val queryPage = QueryPage(page = 1, size = 5)
 
-    @PostMapping("")
-    @ResponseStatus(HttpStatus.CREATED)
-    suspend fun createMusician(@RequestBody @Valid command: CreateMusician): Musician {
-        return writeMusicianUseCase.insert(command)
-    }
-
-    @PatchMapping("/{id}")
-    @ResponseStatus(HttpStatus.OK)
-    suspend fun updateMusician(@PathVariable("id") id: Long, @RequestBody command: UpdateMusician): Musician {
-        return writeMusicianUseCase.update(id, command)
-    }
+    // when
+    val musicians = read.musiciansByQuery(conditions, queryPage.pagination(JMusician.MUSICIAN))
+                        .toList()
+    
+    // then
+    assertThat(musicians.size).isEqualTo(5)
 
 }
 ```
-테스트 코드는 전부 완료했으니 확인을 하면 될 것이다.
 
-# Record 관련 수정 작업
+# UseCase 및 컨트롤러 수정 및 테스트
 
-아마도 똑같은 설명을 반복하게 될 것이다.
+여기까지 왔다면 컨트롤러와 `useCase`부분은 변경하는데 크게 어려움이 없을 것이다.
 
-완성된 코드와 테스트 코드를 살펴보면 될것이라는 한줄로 마무리할까 한다.
+이 부분은 코드로 확인하자.
+
+## Musician one-to-many Record
+
+뮤지션과 레코드는 뮤지션을 기준으로 `one-to-many`관계이다.
+
+특정 뮤지션에 대한 `one-to-mnay`적용을 위해서는 다음과 같이 수정해야 한다.
+
+```kotlin
+override suspend fun musicianWithRecords(id: Long): Musician? {
+    val musician = JMusician.MUSICIAN
+    val record = JRecord.RECORD
+
+    val sqlBuilder =
+        query.select(
+            musician,
+            record
+        )
+        .from(musician)
+        .leftJoin(record).on(musician.ID.eq(record.MUSICIAN_ID))
+        .where(musician.ID.eq(id))
+    return Flux.from(sqlBuilder)
+               .bufferUntilChanged { it.component1() }
+               .map {
+                    rows ->
+                        val selectMusician = rows[0].component1().into(Musician::class.java)
+                        val records = rows.map { it.component2().into(Record::class.java) }
+                        selectMusician.records = records
+                        selectMusician
+               }.awaitSingle()
+}
+``` 
+
+
+
+
+
+
+
+
+
+
+
+
+이 때는 `Flux.from()`으로 감싼다.
+
+`bufferUntilChanged`를 통해서 넘어오는 정보는 `Record2<JMusicianRecord!, JRecordRecord!>!`에 담겨져 넘어온다.
+
+뮤지션을 기준으로 버퍼링을 할 것이기 때문에 첫 번째, 즉 `it.component1()`로 `bufferUntilChanged`를 묶어서 맵 처리를 한다.
+
+`rows`의 정보는 `(Mutable)List<Record2<JMusicianRecord!, JRecordRecord!>!>!`
+다음과 같다.
+
+이후로는 쉽게 처리할 수 있는데 첫 번째 로우로부터 `Record2<JMusicianRecord!, JRecordRecord!>!`를 얻고 `JMusicianRecord`를 다시 얻는다.
+
+이것을 통해서 뮤지션 엔티티로 매핑한다. 
+
+그 이후는 어떤 의미인지 알 수 있을 것이다. 
+
+테스트 코드를 실행해보면 원하는 결과를 얻을 수 있게 된다.
+
+# Record 수정
+
+수정 방식은 뮤지션과 동일하다.
+
+다만 `many-to-one`을 처리하는 함수는 다음과 같다.
+
+```kotlin
+class CustomRecordRepositoryImpl(
+    private val query: DSLContext,
+): CustomRecordRepository {
+
+    override suspend fun updateRecord(id: Long, assignments: MutableMap<Field<*>, Any>): Int {
+        val record = JRecord.RECORD
+        return query.update(record)
+                    .set(assignments)
+                    .where(record.ID.`equal`(id))
+                    .awaitSingle()
+    }
+
+    override fun findAllRecords(conditions: List<Condition>, pagination: Pair<List<SortField<*>>, PageRequest>): Flow<Record> {
+        val record = JRecord.RECORD
+        val musician = JMusician.MUSICIAN
+        val sqlBuilder= query.select(
+            record,
+            musician
+        )
+        .from(record)
+        .join(musician).on(record.MUSICIAN_ID.eq(musician.ID))
+        .where()
+
+        if(conditions.isNotEmpty()) {
+            conditions.forEach { sqlBuilder.and(it) }
+        }
+
+        if(pagination.first.isNotEmpty()) {
+            sqlBuilder.orderBy(pagination.first)
+        }
+        sqlBuilder.limit(pagination.second.pageSize)
+                  .offset(pagination.second.offset)
+
+        return sqlBuilder.asFlow()
+                         .map {
+                                val selectRecord = it.value1().into(Record::class.java)
+                                val selectMusician = it.value2().into(Musician::class.java)
+                                selectRecord.musician = selectMusician
+                                selectRecord
+                         }
+
+    }
+
+
+}
+
+```
+`Flow`객체로 변환 후 `map`을 통해 변환하는 작업을 거치는 것은 동일하다.
+
+이전에는 `mapper`을 이용했는데 커스텀 매퍼를 만들어서 사용해도 무방하다.
+
+변경한 부분은 코드를 확인한다.
 
 # At a Glance
 
-자바하시는 분들에게는 미안하지만 이런 이점을 누릴 수는 없다.
+여기서 사용하는 방식은 매트릭스 변수를 받아서 동적으로 처리하고자 이 프로젝트에 맞추서 작업한 것이다.
 
-어째든 코틀린의 코루틴을 활용하는 이 방식은 `WebFlux`을 접하는데 상당한 이점을 제공한다.
+개발자의 환경 또는 요구사항에 따라서 이런 방식보다는 아마도 실무에서는 `API`에 필요한 정보를 받아서 처리하는 방식일 확률이 높다.
 
-기존의 방식을 그대로 누릴 수 있기 때문이다.
+어찌되었든 이 브랜치는 `jooQ`와 연계해서 어떻게 사용하는지에 대한 가이드라인에 가깝다.
 
-다음은 마지막으로 `functional endpoints`를 이용한 방식을 다루고자 한다.
-
-이미 지금까지 잘 따라오신 분들이라면 이 방식 역시 크게 다르지 않을 것이다.
-
-다만 `FunctionRouter`에서 살짝 변경될 것인데 이마저도 바꿀 게 없다.
-
-그 내용은 다음 브랜치에서 확인해 보자.
+`jooQ`문법을 위한 저장소는 아니기에 관련 내용은 공식 사이트의 스펙을 확인해 보자.

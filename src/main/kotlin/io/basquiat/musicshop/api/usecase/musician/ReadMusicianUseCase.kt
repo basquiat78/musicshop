@@ -6,6 +6,7 @@ import io.basquiat.musicshop.common.extensions.map
 import io.basquiat.musicshop.common.model.request.QueryPage
 import io.basquiat.musicshop.domain.musician.model.entity.Musician
 import io.basquiat.musicshop.domain.musician.service.ReadMusicianService
+import io.basquiat.musicshop.entity.tables.JMusician
 import kotlinx.coroutines.flow.toList
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
@@ -22,10 +23,12 @@ class ReadMusicianUseCase(
     }
 
     suspend fun musiciansByQuery(queryPage: QueryPage, matrixVariable: MultiValueMap<String, Any>): Page<Musician> {
-        val match = createQuery(matrixVariable)
-        return read.musiciansByQuery(queryPage.pagination(match))
+        val musician = JMusician.MUSICIAN
+        val conditions = createQuery(matrixVariable, musician)
+
+        return read.musiciansByQuery(conditions, queryPage.pagination(musician))
                    .toList()
-                   .countZipWith(read.totalCountByQuery(match))
+                   .countZipWith(read.totalCountByQuery(conditions))
                    .map { ( musicians, count) -> PageImpl(musicians.toList(), queryPage.fromPageable(), count)}
     }
 

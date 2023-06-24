@@ -1,13 +1,13 @@
 package io.basquiat.musicshop.api.usecase.record
 
-import io.basquiat.musicshop.common.builder.createNativeSortLimitClause
-import io.basquiat.musicshop.common.builder.createNativeWhereClause
+import io.basquiat.musicshop.common.builder.createQuery
 import io.basquiat.musicshop.common.extensions.countZipWith
 import io.basquiat.musicshop.common.extensions.map
 import io.basquiat.musicshop.common.model.request.QueryPage
 import io.basquiat.musicshop.domain.musician.service.ReadMusicianService
 import io.basquiat.musicshop.domain.record.model.entity.Record
 import io.basquiat.musicshop.domain.record.service.ReadRecordService
+import io.basquiat.musicshop.entity.tables.JRecord
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.toList
 import org.springframework.data.domain.Page
@@ -34,11 +34,8 @@ class ReadRecordUseCase(
     }
 
     fun allRecords(queryPage: QueryPage, matrixVariable: MultiValueMap<String, Any>): Flow<Record> {
-        val prefix = "record"
-        val clazz = Record::class
-        val whereClause = createNativeWhereClause(prefix, clazz, matrixVariable)
-        val (orderSql, limitSql) = createNativeSortLimitClause(prefix, clazz, queryPage)
-        return read.allRecords(whereClause = whereClause, orderClause = orderSql, limitClause = limitSql)
+        val record = JRecord.RECORD
+        return read.allRecords(createQuery(matrixVariable, record), queryPage.pagination(record))
     }
 
 }
