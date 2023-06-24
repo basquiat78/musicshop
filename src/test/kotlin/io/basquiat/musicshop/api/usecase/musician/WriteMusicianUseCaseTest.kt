@@ -3,7 +3,6 @@ package io.basquiat.musicshop.api.usecase.musician
 import io.basquiat.musicshop.api.usecase.musician.model.CreateMusician
 import io.basquiat.musicshop.api.usecase.musician.model.UpdateMusician
 import io.basquiat.musicshop.domain.musician.model.code.Genre
-import io.basquiat.musicshop.domain.musician.service.ReadMusicianService
 import kotlinx.coroutines.test.runTest
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
@@ -20,35 +19,33 @@ import org.springframework.test.context.transaction.TransactionalTestExecutionLi
 )
 class WriteMusicianUseCaseTest @Autowired constructor(
 	private val writeUseCase: WriteMusicianUseCase,
-	private val readMusicianService: ReadMusicianService,
 ) {
 
 	@Test
 	@DisplayName("musician insert useCase test")
 	fun insertUseCaseTEST() = runTest {
 		// given
-		val command = CreateMusician(name = "Lester Young", genre = Genre.ETC.name)
+		val command = CreateMusician(name = "Jimmy Smith", genre = Genre.ETC.name)
 
 		// when
 		val musician = writeUseCase.insert(command)
 
 		// then
-		assertThat(musician.genre).isEqualTo(Genre.JAZZ)
+		assertThat(musician.genre).isEqualTo(Genre.ETC)
 	}
 
 	@Test
 	@DisplayName("musician update useCase test")
 	fun updateUseCaseTEST() = runTest {
 		// given
-		val id = 24L
+		val id = 27L
 		val command = UpdateMusician(genre = Genre.JAZZ.name)
 
 		// when
-		writeUseCase.update(id, command)
+		val updated = writeUseCase.update(id, command)
 
 		// then
-		val update = readMusicianService.musicianById(id)!!
-		assertThat(update.genre).isEqualTo(Genre.JAZZ)
+		assertThat(updated.genre).isEqualTo(Genre.JAZZ)
 	}
 
 }

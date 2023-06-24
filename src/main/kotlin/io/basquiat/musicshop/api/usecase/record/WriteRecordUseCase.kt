@@ -31,8 +31,7 @@ class WriteRecordUseCase(
 
     suspend fun update(id: Long, command: UpdateRecord): Record {
         val target = read.recordByIdOrThrow(id)
-        val (record, assignments) = command.createAssignments(target)
-        write.update(record, assignments)
+        write.update(target.id!!, command.createAssignments())
         return read.recordById(id)!!
     }
 

@@ -1,11 +1,12 @@
 package io.basquiat.musicshop.domain.musician.service
 
-import io.basquiat.musicshop.api.usecase.musician.model.UpdateMusician
 import io.basquiat.musicshop.common.transaction.Transaction
 import io.basquiat.musicshop.domain.musician.model.code.Genre
 import io.basquiat.musicshop.domain.musician.model.entity.Musician
+import io.basquiat.musicshop.entity.tables.JMusician
 import kotlinx.coroutines.test.runTest
 import org.assertj.core.api.Assertions.assertThat
+import org.jooq.Field
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -13,7 +14,6 @@ import org.springframework.boot.test.context.SpringBootTest
 
 @SpringBootTest
 class WriteMusicianServiceTest @Autowired constructor(
-	private val read: ReadMusicianService,
 	private val write: WriteMusicianService,
 ) {
 
@@ -37,21 +37,16 @@ class WriteMusicianServiceTest @Autowired constructor(
 	fun updateMusicianTEST() = runTest {
 		// given
 		val id = 1L
-
-		val command = UpdateMusician(name = "Charlie Parker", genre = "POP")
-
-		val target = read.musicianByIdOrThrow(1)
-
-		val (musician, assignments) = command.createAssignments(target)
+		val assignments = mutableMapOf<Field<*>, Any>()
+		val musician = JMusician.MUSICIAN
+		assignments[musician.NAME] = "Charlie Parker"
+		assignments[musician.GENRE] = Genre.JAZZ.name
 
 		// when
-		val update = Transaction.withRollback(id) {
-			write.update(musician, assignments)
-			read.musicianById(id)!!
-		}
+		val update = write.update(id, assignments)
 
 		// then
-		assertThat(update.genre).isEqualTo(Genre.POP)
+		assertThat(update).isEqualTo(id)
 	}
 
 }
