@@ -5,6 +5,7 @@ plugins {
 	id("io.spring.dependency-management") version "1.1.0"
 	kotlin("jvm") version "1.8.21"
 	kotlin("plugin.spring") version "1.8.21"
+	kotlin("kapt") version "1.8.21"
 }
 
 group = "io.basquiat"
@@ -24,6 +25,11 @@ dependencies {
 	implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 
 	implementation("io.r2dbc:r2dbc-proxy:1.1.1.RELEASE")
+	implementation("io.r2dbc:r2dbc-pool:1.0.0.RELEASE")
+
+
+	implementation("com.infobip:infobip-spring-data-r2dbc-querydsl-boot-starter:8.1.2")
+	kapt("com.infobip:infobip-spring-data-jdbc-annotation-processor:8.1.2")
 
 	implementation("io.projectreactor.kotlin:reactor-kotlin-extensions")
 	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")

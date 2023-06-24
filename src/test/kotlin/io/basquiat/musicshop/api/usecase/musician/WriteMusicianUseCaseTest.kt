@@ -3,7 +3,6 @@ package io.basquiat.musicshop.api.usecase.musician
 import io.basquiat.musicshop.api.usecase.musician.model.CreateMusician
 import io.basquiat.musicshop.api.usecase.musician.model.UpdateMusician
 import io.basquiat.musicshop.domain.musician.model.code.Genre
-import io.basquiat.musicshop.domain.musician.service.ReadMusicianService
 import kotlinx.coroutines.test.runTest
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
@@ -20,7 +19,6 @@ import org.springframework.test.context.transaction.TransactionalTestExecutionLi
 )
 class WriteMusicianUseCaseTest @Autowired constructor(
 	private val writeUseCase: WriteMusicianUseCase,
-	private val readMusicianService: ReadMusicianService,
 ) {
 
 	@Test
@@ -40,14 +38,13 @@ class WriteMusicianUseCaseTest @Autowired constructor(
 	@DisplayName("musician update useCase test")
 	fun updateUseCaseTEST() = runTest {
 		// given
-		val id = 24L
-		val command = UpdateMusician(genre = Genre.JAZZ.name)
+		val id = 32L
+		val command = UpdateMusician()
 
 		// when
-		writeUseCase.update(id, command)
+		val update = writeUseCase.update(id, command)
 
 		// then
-		val update = readMusicianService.musicianById(id)!!
 		assertThat(update.genre).isEqualTo(Genre.JAZZ)
 	}
 

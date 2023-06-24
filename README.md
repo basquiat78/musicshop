@@ -1,19 +1,36 @@
-# MusicShop Using Controller With Coroutine Extension
+# MusicShop integration queryDSL
 
-이 방식은 기존의 프로듀서인 `Flux`, `Mono`가 아닌 일반적인 `Web MVC`방식과 거의 흡사하다.
+공식적으로 제공하는게 아니고 `infobip`이라는 깃헙에서 개발하고 있는 라이브러리를 쓰게 된다.
 
-# Before
+일단 [official QueryDsL](http://querydsl.com/)에 `Related projects`항목에 가보자.
 
-이런 방식을 사용하기 위해서는 코틀린에서 제공하는 라이브러리를 먼저 그레이들에 설정하자.
+그러면 `Extensions`에 관련 깃헙 링크가 존재한다.
+
+[infobip-spring-data-querydsl](https://github.com/infobip/infobip-spring-data-querydsl)에 가보자.
+
+먼저 여기서 눈여겨 볼 것은 [Annotation processor](https://github.com/infobip/infobip-spring-data-querydsl#annotation-processor)항목이다.
+
+참고로 여기서는 `QueryDSL`을 안다는 가정하에 작성되었기 때문에 `QueryDSL`에 대한 문법은 건너 띌 확률이 높다.
+
+최소한 `QueryDSL`에 대해 알아보는 방법을 추천한다.
+
+# pre setting
+
+깃헙 `README.md`를 보면 메이븐 최신 버전은 `8.1.2`이다.
+
+`WebFlux`가 아닌 일반 `MVC`에서 `QueryDSL`사용시 `QClass`를 생성하는 플로그인 설정 관련해서는 그레이들에서 `kts`로 작업시에는 `kapt`를 사용한다.
+
+따라서 다음과 같이 설정을 추가해 주자.
 
 ```groovy
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    id("org.springframework.boot") version "3.1.0"
-    id("io.spring.dependency-management") version "1.1.0"
-    kotlin("jvm") version "1.8.21"
-    kotlin("plugin.spring") version "1.8.21"
+	id("org.springframework.boot") version "3.1.0"
+	id("io.spring.dependency-management") version "1.1.0"
+	kotlin("jvm") version "1.8.21"
+	kotlin("plugin.spring") version "1.8.21"
+	kotlin("kapt") version "1.8.21"
 }
 
 group = "io.basquiat"
@@ -21,187 +38,596 @@ version = "0.0.1-SNAPSHOT"
 java.sourceCompatibility = JavaVersion.VERSION_17
 
 repositories {
-    mavenCentral()
+	mavenCentral()
 }
 
 dependencies {
-    implementation("org.springframework.boot:spring-boot-starter-actuator")
-    implementation("org.springframework.boot:spring-boot-starter-data-r2dbc")
-    implementation("org.springframework.boot:spring-boot-starter-webflux")
-    implementation("org.springframework.boot:spring-boot-starter-validation")
-    
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
-    
-    implementation("io.r2dbc:r2dbc-proxy:1.1.1.RELEASE")
-    
-    implementation("io.projectreactor.kotlin:reactor-kotlin-extensions")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
-    
-    implementation("org.jetbrains.kotlin:kotlin-reflect")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
-    
-    implementation("mysql:mysql-connector-java:8.0.33")
-    implementation("com.github.jasync-sql:jasync-r2dbc-mysql:2.1.24")
-    
-    developmentOnly("org.springframework.boot:spring-boot-devtools")
-    
-    testImplementation("io.projectreactor:reactor-test")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.1")
-    testImplementation("org.springframework.boot:spring-boot-starter-test") {
-        exclude(module = "junit-vintage-engine")
-    }
+	implementation("org.springframework.boot:spring-boot-starter-actuator")
+	implementation("org.springframework.boot:spring-boot-starter-data-r2dbc")
+	implementation("org.springframework.boot:spring-boot-starter-webflux")
+	implementation("org.springframework.boot:spring-boot-starter-validation")
+
+	implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+
+	implementation("io.r2dbc:r2dbc-proxy:1.1.1.RELEASE")
+	implementation("io.r2dbc:r2dbc-pool:1.0.0.RELEASE")
+
+
+	implementation("com.infobip:infobip-spring-data-r2dbc-querydsl-boot-starter:8.1.2")
+	kapt("com.infobip:infobip-spring-data-jdbc-annotation-processor:8.1.2")
+
+	implementation("io.projectreactor.kotlin:reactor-kotlin-extensions")
+	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
+
+	implementation("org.jetbrains.kotlin:kotlin-reflect")
+	implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
+
+	implementation("mysql:mysql-connector-java:8.0.33")
+	implementation("com.github.jasync-sql:jasync-r2dbc-mysql:2.1.24")
+
+	developmentOnly("org.springframework.boot:spring-boot-devtools")
+
+	testImplementation("io.projectreactor:reactor-test")
+	testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
+	testImplementation("org.springframework.boot:spring-boot-starter-test") {
+		exclude(module = "junit-vintage-engine")
+	}
 
 }
 
 tasks.withType<KotlinCompile> {
-    kotlinOptions {
-        freeCompilerArgs = listOf("-Xjsr305=strict")
-        jvmTarget = "17"
-    }
+	kotlinOptions {
+		freeCompilerArgs = listOf("-Xjsr305=strict")
+		jvmTarget = "17"
+	}
 }
 
 tasks.withType<Test> {
-    useJUnitPlatform()
+	useJUnitPlatform()
 }
+```
+다만 이 항목에서 이런 내용이 있다.
 
 ```
-`io.projectreactor.kotlin:reactor-kotlin-extensions`, `org.jetbrains.kotlinx:kotlinx-coroutines-reactor`을 추가한다.
+R2DBC module:
 
-그리고 테스트를 위한 `org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.1`도 같이 설정하자.
+Requirements:
+Java 17 with parameter names preserved in byte code (used to map columns to constructor parameters)
+Spring Data R2DBC
+entities must have an all argument constructor (@AllArgsConstructor), can have others as well
+entity class and all argument constructor must be public (limitation of Querydsl)
+if you're not using Flyway, you need to provide a SQLTemplates bean
+```
+우리는 `Flyway`를 사용하지 않기 때문에 `SQLTemplates`을 빈으로 주입해줘야 한다.
 
-# BaseRepository 설정
-
-이 방식을 사용할 때 몇 가지 추가적인 부분이 있다.
-
-기존 방식을 유지하기 위해서는 `R2dbcRepository`가 아닌 `CoroutineCrudRepository`을 사용해야 한다.
-
-따라서 다음과 같이 공통으로 사용할 녀석을 정의하자.
+그렇지 않으면 서버가 실행되지 않는다.
 
 ```kotlin
-@NoRepositoryBean
-interface BaseRepository<M, ID>: CoroutineCrudRepository<M, ID>, CoroutineSortingRepository<M, ID>
+@Configuration
+class QueryDslConfiguration {
+    @Bean
+    fun sqlTemplates() = MySQLTemplates()
+}
 ```
 
-# CustomCrudRepositoryExtensions 수정
+다양한 템플릿을 제공하는데 여기선 `mySql`을 사용하고 있으니 `MySQLTemplates`로 설정한다.
 
-기존에 우리가 사용하던 코드이다.
+# 아니 근데 왜 잘 돌아가던 코드들이 전부 에러가 난디여??? 
+
+먼저 새로운 것을 도입할 때 가장 중요한 것은 바로 `side-effect`체크이다.
+
+어떤 라이브러리 또는 프레임워크를 적용할 때 기존에 잘 작동하던 녀석들이 안되면 이것도 문제라는 것이다.
+
+그래서 나의 경우에는 항상 뭔가 영향을 주는 라이브러리를 적용하면 기존의 테스트 코드를 무조건 실행해 본다.
+
+가장 기본적은 `API`인 `musicianById`를 누르는 순간 이상한 에러를 만나게 된다.
+
+```
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+ :: Spring Boot ::                (v3.1.0)
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+INFO 5601 --- [-netty-thread-2] i.b.m.c.listener.QueryLoggingListener    : Result Row : Optional[1]
+INFO 5601 --- [-netty-thread-2] i.b.m.c.listener.QueryLoggingListener    : ConnectionId: 10 
+Query:["SELECT 1"] 
+Bindings:[] 
+Result Count : 1
+INFO 5601 --- [-netty-thread-2] i.b.m.c.listener.QueryLoggingListener    : Result Row : null
+INFO 5601 --- [-netty-thread-2] i.b.m.c.listener.QueryLoggingListener    : ConnectionId: 10 
+Query:["SELECT musician.id, musician.name, musician.genre, musician.created_at, musician.updated_at FROM musician WHERE musician.id = ?"] 
+Bindings:[(1)] 
+Result Count : 1
+INFO 5601 --- [-netty-thread-2] i.b.m.c.listener.QueryLoggingListener    : ConnectionId: 10 
+Query:["SELECT musician.id, musician.name, musician.genre, musician.created_at, musician.updated_at FROM musician WHERE musician.id = ?"] 
+Bindings:[(1)] 
+Result Count : 1
+
+org.springframework.data.mapping.MappingException: Could not read property @org.springframework.data.annotation.Id()private java.lang.Long io.basquiat.musicshop.domain.musician.model.entity.Musician.id from column Id
+
+	at |b|b|b(Coroutine boundary.|b(|b)
+	at io.basquiat.musicshop.domain.musician.service.ReadMusicianServiceTest$musicianByIdTEST$1.invokeSuspend(ReadMusicianServiceTest.kt:29)
+	at kotlinx.coroutines.test.TestBuildersKt__TestBuildersKt$runTestCoroutine$2.invokeSuspend(TestBuilders.kt:212)
+Caused by: org.springframework.data.mapping.MappingException: Could not read property @org.springframework.data.annotation.Id()private java.lang.Long io.basquiat.musicshop.domain.musician.model.entity.Musician.id from column Id
+	at org.springframework.data.r2dbc.convert.MappingR2dbcConverter.readFrom(MappingR2dbcConverter.java:188)
+	at org.springframework.data.r2dbc.convert.MappingR2dbcConverter$RowParameterValueProvider.getParameterValue(MappingR2dbcConverter.java:716)
+	at org.springframework.data.mapping.model.SpELExpressionParameterValueProvider.getParameterValue(SpELExpressionParameterValueProvider.java:49)
+	at org.springframework.data.relational.core.conversion.BasicRelationalConverter$ConvertingParameterValueProvider.getParameterValue(BasicRelationalConverter.java:293)
+	at org.springframework.data.mapping.model.KotlinClassGeneratingEntityInstantiator$DefaultingKotlinClassInstantiatorAdapter.extractInvocationArguments(KotlinClassGeneratingEntityInstantiator.java:222)
+	at org.springframework.data.mapping.model.KotlinClassGeneratingEntityInstantiator$DefaultingKotlinClassInstantiatorAdapter.createInstance(KotlinClassGeneratingEntityInstantiator.java:196)
+	at org.springframework.data.mapping.model.ClassGeneratingEntityInstantiator.createInstance(ClassGeneratingEntityInstantiator.java:98)
+	at org.springframework.data.relational.core.conversion.BasicRelationalConverter.createInstance(BasicRelationalConverter.java:135)
+	at org.springframework.data.r2dbc.convert.MappingR2dbcConverter.createInstance(MappingR2dbcConverter.java:328)
+	...more
+Caused by: java.util.NoSuchElementException: Key Id is missing in the map.
+	at kotlin.collections.MapsKt__MapWithDefaultKt.getOrImplicitDefaultNullable(MapWithDefault.kt:24)
+	at kotlin.collections.MapsKt__MapsKt.getValue(Maps.kt:349)
+	at com.github.jasync.sql.db.general.ArrayRowData.get(ArrayRowData.kt:37)
+	at com.github.jasync.r2dbc.mysql.JasyncRow.get(JasyncRow.kt:85)
+	at com.github.jasync.r2dbc.mysql.JasyncRow.get(JasyncRow.kt:29)
+	at com.github.jasync.r2dbc.mysql.JasyncRow.get(JasyncRow.kt:20)
+	at io.r2dbc.spi.Readable.get(Readable.java:80)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at io.r2dbc.proxy.callback.CallbackHandlerSupport.lambda$static$0(CallbackHandlerSupport.java:73)
+	at io.r2dbc.proxy.callback.CallbackHandlerSupport.proceedExecution(CallbackHandlerSupport.java:182)
+	at io.r2dbc.proxy.callback.RowCallbackHandler.lambda$invoke$0(RowCallbackHandler.java:73)
+	... 81 more
+
+
+Process finished with exit code 255
+
+```
+쿼리가 날아간 것까지는 로그로 확인할 수 있다.
+
+근데 여기서 우리는 
+```
+org.springframework.data.mapping.MappingException: Could not read property @org.springframework.data.annotation.Id()private java.lang.Long io.basquiat.musicshop.domain.musician.model.entity.Musician.id from column Id
+```
+이 에러를 해결해야 한다.
+
+# 문제 파악
+현재 이 상태로 컴파일을 실행하면 `build > generated > source > kapt > main`경로로 `QClass`가 생성된 걸 볼 수 있다.
+
+
+```java
+/**
+ * QMusician is a Querydsl query type for Musician
+ */
+@Generated("com.infobip.spring.data.jdbc.annotation.processor.CustomMetaDataSerializer")
+public class QMusician extends com.querydsl.sql.RelationalPathBase<Musician> {
+
+    private static final long serialVersionUID = -747127729;
+
+    public static final QMusician musician = new QMusician("Musician");
+
+    public final NumberPath<Long> id = createNumber("id", Long.class);
+
+    public final StringPath name = createString("name");
+
+    public final EnumPath<io.basquiat.musicshop.domain.musician.model.code.Genre> genre = createEnum("genre", io.basquiat.musicshop.domain.musician.model.code.Genre.class);
+
+    public final DateTimePath<java.time.LocalDateTime> createdAt = createDateTime("createdAt", java.time.LocalDateTime.class);
+
+    public final DateTimePath<java.time.LocalDateTime> updatedAt = createDateTime("updatedAt", java.time.LocalDateTime.class);
+
+    public QMusician(String variable) {
+        super(Musician.class, forVariable(variable), null, "musician");
+        addMetadata();
+    }
+
+    public QMusician(String variable, String schema, String table) {
+        super(Musician.class, forVariable(variable), schema, table);
+        addMetadata();
+    }
+
+    public QMusician(String variable, String schema) {
+        super(Musician.class, forVariable(variable), schema, "musician");
+        addMetadata();
+    }
+
+    public QMusician(Path<Musician> path) {
+        super(path.getType(), path.getMetadata(), null, "musician");
+        addMetadata();
+    }
+
+    public QMusician(PathMetadata metadata) {
+        super(Musician.class, metadata, null, "musician");
+        addMetadata();
+    }
+
+    public void addMetadata() {
+        addMetadata(id, ColumnMetadata.named("Id").withIndex(0));
+        addMetadata(name, ColumnMetadata.named("Name").withIndex(1));
+        addMetadata(genre, ColumnMetadata.named("Genre").withIndex(2));
+        addMetadata(createdAt, ColumnMetadata.named("created_at").withIndex(3));
+        addMetadata(updatedAt, ColumnMetadata.named("updated_at").withIndex(4));
+    }
+
+}
+```
+다음은 `jpa`를 사용하는 다른 프로젝트에서 생성된 `QClass`이다.
+
+```java
+/**
+ * QMeta is a Querydsl query type for Meta
+ */
+@Generated("com.querydsl.codegen.DefaultEntitySerializer")
+public class QMeta extends EntityPathBase<Meta> {
+
+    private static final long serialVersionUID = 1674230818L;
+
+    public static final QMeta meta = new QMeta("meta");
+
+    public final NumberPath<Long> balance = createNumber("balance", Long.class);
+
+    public final DateTimePath<java.time.LocalDateTime> createdAt = createDateTime("createdAt", java.time.LocalDateTime.class);
+
+    public final NumberPath<Long> id = createNumber("id", Long.class);
+
+    public final StringPath imageUrl = createString("imageUrl");
+
+    public final StringPath name = createString("name");
+
+    public final StringPath owner = createString("owner");
+
+    public final StringPath symbol = createString("symbol");
+
+    public QMeta(String variable) {
+        super(Meta.class, forVariable(variable));
+    }
+
+    public QMeta(Path<? extends Meta> path) {
+        super(path.getType(), path.getMetadata());
+    }
+
+    public QMeta(PathMetadata metadata) {
+        super(Meta.class, metadata);
+    }
+
+}
+```
+차이가 보이는데 `public static final QMusician musician = new QMusician("Musician");`, `public static final QMeta meta = new QMeta("meta");`를 먼저 보자.
+
+기존은 `meta`로 소문자로 표기되는데 여기서는 `Musician`으로 대문자로 시작한다.
+
+근데 이건 사실 문제가 되는건 아니다.     
+
+다만 `addMeate`에 정의된 것을 보면 `created_at`, `updated_at`을 제외하고 대문자로 시작한다.
+
+[Annotation processor](https://github.com/infobip/infobip-spring-data-querydsl#annotation-processor)에서 그 힌트를 얻을 수 있는데
 
 ```kotlin
-fun <T, ID> R2dbcRepository<T, ID>.findByIdOrThrow(id: ID, message: String? = null): Mono<T> {
-    return this.findById(id)
-               .switchIfEmpty { notFound(message?.let{ it } ?: "Id [$id]로 조회된 정보가 없습니다.") }
+Annotation processor infobip-spring-data-jdbc-annotation-processor is used by R2DBC and JDBC modules to generate Querydsl Q classes. Without annotation processor this process can be quite cumbersome as connecting to database would be required during the build phase.
 
-}
+Annotation processor generates Q classes for all classes that have @Id annotated fields. Reason why @Id is used and not some custom annotation is for simplicity of use and implementation and because @Id is required by Spring Data JDBC:
+
+Spring Data JDBC uses the ID to identify entities. The ID of an entity must be annotated with Spring Data’s @Id annotation.
+
+여기 ! --> Current implementation of Annotation Processor uses pascal casing based naming strategy for table and column names.
+
+To customize this behavior across whole project add following annotation to one of your classes:
 ```
+`여기 !`부분을 보면 `pascal casing`이라고 되어 있다.
 
-하지만 이제는 이것을 사용하지 않고 아래 것을 사용하자.
+구글링으로 파스칼 방식이 뭔가 찾아봤더니 `단어의 첫 문자와 각 단어의 첫 글자를 대문자로 표기하는 명명 규칙`이라고 한다.
+
+# 가장 심플한 방법
+
+생성된 `QClass`에서 해답을 찾는 방법이다.
+
+`created_at`, `updated_at`을 보면 `@Column`을 사용하는 경우에는 설정한 값을 세팅한 것을 알 수 있다.
+
+이유는 `spring-data`에서 `@Column`에 설정한 값을 우선순위로 두기 때문이다.    
+
+디비의 컬럼과 맞출기 위해서 사용했을 테니 당연하겠지.
+
+번거롭더라도 다른 복잡한 방법을 사용하지 않고 해결하는 방법은 `@Column`을 일일히 설정하는 것이다.
+
+# 더 가장 심플한 방법
+
+처음 프로젝트 만들 때 엔티티 작업하면서 이 방법을 적용한다면 위 방식도 나아보인다.
+
+하지만 이미 만들어진 엔티티, 더군다나 그 엔티티가 한두개가 아니면 저 방식으로 처리하는 건 바보같은 짓이다.
 
 ```kotlin
-suspend fun <T, ID> CoroutineCrudRepository<T, ID>.findByIdOrThrow(id: ID, message: String? = null): T {
-    return this.findById(id) ?: notFound(message)
+@Configuration
+@ProjectTableCaseFormat(CaseFormat.LOWER_UNDERSCORE)
+@ProjectColumnCaseFormat(CaseFormat.LOWER_UNDERSCORE)
+class QueryDslConfiguration {
+    @Bean
+    fun sqlTemplates() = MySQLTemplates()
 }
 ```
-여기서 `suspend`가 붙은 것을 볼 수 있다.
+끗~~~
 
-또한 `Mono`가 아닌 일반적인 `Web MVC`의 패턴을 따라간다.
+생성된 `QClass`를 보면 원하는 방식으로 적용된 걸 볼 수 있다.
 
-실제로 `CoroutineCrudRepository`를 보면
+## 그러나???? 이게 끝일거라고 생각했어????
+
+결론적으로 `가장 심플한 방법`으로 결정했다면 이것만으로는 해결이 안된다.
+
+~~이렇게 하면 해결이 될 수 있을거라 생각해써~~~
+
+예를 들면 `@Column`을 통해 일일히 작업을 한 경우에는 문제가 없이 처리가 된다.
+
+`가장 심플한 방법`을 적용하고 엔티티의 `@Column`을 지우고 컴파일된 `QClass`를 보면서 좋아라 한 내가 바보가 되는 순간이다.
+
+결국 `도대체 왜`라는 질문을 가지고 디버깅을 시도하기 시작한다.
+
+그냥 처음부터 할껄 그랬다는 후회 껄무새가 되버리면서
+
+```
+org.springframework.data.mapping.MappingException: Could not read property @org.springframework.data.annotation.Id()private java.lang.Long io.basquiat.musicshop.domain.musician.model.entity.Musician.id from column Id
+
+	at |b|b|b(Coroutine boundary.|b(|b)
+	at io.basquiat.musicshop.common.extensions.CustomCrudRepositoryExtensionsKt.findByIdOrThrow(CustomCrudRepositoryExtensions.kt:7)
+	at io.basquiat.musicshop.domain.musician.service.ReadMusicianServiceTest$musicianByIdOrThrowTEST$1.invokeSuspend(ReadMusicianServiceTest.kt:43)
+	at kotlinx.coroutines.test.TestBuildersKt__TestBuildersKt$runTestCoroutine$2.invokeSuspend(TestBuilders.kt:212)
+Caused by: org.springframework.data.mapping.MappingException: Could not read property @org.springframework.data.annotation.Id()private java.lang.Long io.basquiat.musicshop.domain.musician.model.entity.Musician.id from column Id
+	at org.springframework.data.r2dbc.convert.MappingR2dbcConverter.readFrom(MappingR2dbcConverter.java:188)
+```
+이 에러를 중심으로 `MappingR2dbcConverter`의 `readFrom`에 포인트를 잡고 디버깅 시작!!!
+
+![갭쳐1](https://raw.githubusercontent.com/basquiat78/sns/master/%E1%84%89%E1%85%B3%E1%84%8F%E1%85%B3%E1%84%85%E1%85%B5%E1%86%AB%E1%84%89%E1%85%A3%E1%86%BA%202023-06-30%20%E1%84%8B%E1%85%A9%E1%84%92%E1%85%AE%204.12.09.png)
+
+이미지를 보면 `property`항목이 보이는데 어라? `columnName`이 `Id`로 되어 있다.
+
+```java
+@Nullable
+private Object readFrom(Row row, @Nullable RowMetadata metadata, RelationalPersistentProperty property,
+        String prefix) {
+
+    String identifier = prefix + property.getColumnName().getReference();
+
+    try {
+
+        Object value = null;
+        if (metadata == null || RowMetadataUtils.containsColumn(metadata, identifier)) {
+
+            if (property.getType().equals(Clob.class)) {
+                value = row.get(identifier, Clob.class);
+            } else if (property.getType().equals(Blob.class)) {
+                value = row.get(identifier, Blob.class);
+            } else {
+                value = row.get(identifier);
+            }
+        }
+
+        if (value == null) {
+            return null;
+        }
+
+        if (getConversions().hasCustomReadTarget(value.getClass(), property.getType())) {
+            return readValue(value, property.getTypeInformation());
+        }
+
+        if (property.isEntity()) {
+            return readEntityFrom(row, metadata, property);
+        }
+
+        return readValue(value, property.getTypeInformation());
+
+    } catch (Exception o_O) {
+        throw new MappingException(String.format("Could not read property %s from column %s", property, identifier), o_O);
+    }
+}
+```
+여기서 `value = row.get(identifier);`이 부분에서 에러가 난다.
+
+디버깅 이미지에 의하면 `property`는 `BasicRelationalPersistentProperty`이다.
+
+좋다. 
+
+그럼 왜 이런 현상이 발생하는지 바로 따라가자.
+
+```java
+public class BasicRelationalPersistentProperty extends AnnotationBasedPersistentProperty<RelationalPersistentProperty>
+		implements RelationalPersistentProperty {
+
+	public BasicRelationalPersistentProperty(Property property, PersistentEntity<?, RelationalPersistentProperty> owner,
+			SimpleTypeHolder simpleTypeHolder, NamingStrategy namingStrategy) {
+
+		super(property, owner, simpleTypeHolder);
+		this.namingStrategy = namingStrategy;
+
+		Assert.notNull(namingStrategy, "NamingStrategy must not be null");
+
+		this.isEmbedded = Lazy.of(() -> Optional.ofNullable(findAnnotation(Embedded.class)).isPresent());
+
+		this.embeddedPrefix = Lazy.of(() -> Optional.ofNullable(findAnnotation(Embedded.class)) //
+				.map(Embedded::prefix) //
+				.orElse(""));
+
+		this.columnName = Lazy.of(() -> Optional.ofNullable(findAnnotation(Column.class)) //
+				.map(Column::value) //
+				.filter(StringUtils::hasText) //
+				.map(this::createSqlIdentifier) //
+				.orElseGet(() -> createDerivedSqlIdentifier(namingStrategy.getColumnName(this))));
+
+		this.collectionIdColumnName = Lazy.of(() -> Optionals
+				.toStream(Optional.ofNullable(findAnnotation(MappedCollection.class)) //
+						.map(MappedCollection::idColumn), //
+						Optional.ofNullable(findAnnotation(Column.class)) //
+								.map(Column::value)) //
+				.filter(StringUtils::hasText) //
+				.findFirst() //
+				.map(this::createSqlIdentifier)); //
+
+		this.collectionKeyColumnName = Lazy.of(() -> Optionals //
+				.toStream(Optional.ofNullable(findAnnotation(MappedCollection.class)).map(MappedCollection::keyColumn)) //
+				.filter(StringUtils::hasText).findFirst() //
+				.map(this::createSqlIdentifier) //
+				.orElseGet(() -> createDerivedSqlIdentifier(namingStrategy.getKeyColumn(this))));
+	}
+
+}
+```
+나머지는 지우고 생성자 부분만 남겼는데 여기 보면 `columnName`부분에서 문제의 부분이 보이기 시작한다.
+
+```java
+this.columnName = Lazy.of(() -> Optional.ofNullable(findAnnotation(Column.class)) //
+				.map(Column::value) //
+				.filter(StringUtils::hasText) //
+				.map(this::createSqlIdentifier) //
+				.orElseGet(() -> createDerivedSqlIdentifier(namingStrategy.getColumnName(this))));
+```
+`namingStrategy.getColumnName(this)`이 코드가 눈에 떡하니 보인다.
+
+![갭쳐2](https://raw.githubusercontent.com/basquiat78/sns/master/%E1%84%89%E1%85%B3%E1%84%8F%E1%85%B3%E1%84%85%E1%85%B5%E1%86%AB%E1%84%89%E1%85%A3%E1%86%BA%202023-06-30%20%E1%84%8B%E1%85%A9%E1%84%92%E1%85%AE%204.20.23.png)
+
+이 이미지를 보면 `nameStrategy`를 지금 `PascalCaseNamingStrategy`로 위임하고 있다.!!!!!
+
+아래는 `org.springframework.data.relational.core.mapping`패키지 내의 `NamingStrategy`클래스이다.
+
+일단 다른 건 지우고 우리가 관심을 가질 부분만 보자.
+
+```java
+public interface NamingStrategy {
+
+	
+	default String getTableName(Class<?> type) {
+
+		Assert.notNull(type, "Type must not be null");
+
+		return ParsingUtils.reconcatenateCamelCase(type.getSimpleName(), "_");
+	}
+
+	default String getColumnName(RelationalPersistentProperty property) {
+
+		Assert.notNull(property, "Property must not be null");
+
+		return ParsingUtils.reconcatenateCamelCase(property.getName(), "_");
+	}
+}
+```
+이 코드를 보면 `camelCase`로 처리하고 있는데 이것을 `infobip-queryDSL`에서는 `PascalCaseNamingStrategy`를 사용하고 있는 것이다.
+
+`infobip-queryDls`의 설정 파일을 한번 보자.
 
 ```kotlin
-@NoRepositoryBean
-interface CoroutineCrudRepository<T, ID> : Repository<T, ID> {
-	suspend fun <S : T> save(entity: S): T
-	fun <S : T> saveAll(entities: Iterable<S>): Flow<S>
-	fun <S : T> saveAll(entityStream: Flow<S>): Flow<S>
-	suspend fun findById(id: ID): T?
-	suspend fun existsById(id: ID): Boolean
-	fun findAll(): Flow<T>
-	fun findAllById(ids: Iterable<ID>): Flow<T>
-	fun findAllById(ids: Flow<ID>): Flow<T>
-	suspend fun count(): Long
-	suspend fun deleteById(id: ID)
-	suspend fun delete(entity: T)
-	suspend fun deleteAllById(ids: Iterable<ID>)
-	suspend fun deleteAll(entities: Iterable<T>)
-	suspend fun <S : T> deleteAll(entityStream: Flow<S>)
-	suspend fun deleteAll()
+@Import(InfobipSpringDataCommonConfiguration.class)
+@Configuration
+public class QuerydslSqlQueryConfiguration {
+
+    @ConditionalOnMissingBean
+    @Bean
+    public NamingStrategy pascalCaseNamingStrategy() {
+        return new PascalCaseNamingStrategy();
+    }
 }
 ```
-위 코드를 보면 `suspend`가 붙은 경우와 아닌 경우를 볼 수 있다.
+나머지는 지우고 위 코드를 보자.
 
-이것은 반환되는 타입에 따라 달라지는데 컬렉션의 경우에는 `Flow`로 감싸는 것을 알 수 있다.
+`PascalCaseNamingStrategy`클래스
+```kotlin
+public class PascalCaseNamingStrategy implements NamingStrategy {
 
-하지만 이것도 제공하는 `API`를 통해서 다루게 된다.
+    @Override
+    public String getTableName(Class<?> type) {
+        return type.getSimpleName();
+    }
 
-# 차라리 새로 만든다는 느낌으로 시작하자.
+    @Override
+    public String getColumnName(RelationalPersistentProperty property) {
+        return property.getName().substring(0, 1).toUpperCase() + property.getName().substring(1);
+    }
+}
+```
+결국 우리가 `QClass`생성시에 제대로 컴파일했다고 생각해도 `BasicRelationalPersistentProperty`내에서 이 파스칼 방식으로 변환한다는 것을 알았다.
 
-기존 코드가 변경되면서 대부분의 코드에서 에러가 나기 때문에 차라리 새로 작성한다는 마음으로 시작하는게 좋다.
-
-하지만 기존의 작업했던 디비에 쌓인 데이터를 통해서 먼저 `Read`쪽을 수정하도록 한다.
-
-# MusicianRepository 수정
+이전 브랜치에서 
 
 ```kotlin
+fun getNativeColumn(columnName: String, clazz: KClass<*>): String {
+    val members = clazz.java.declaredFields
+    val annotationValues = members.mapNotNull { member ->
+        val list = member.annotations
+        val column = list.find { it.annotationClass == Column::class } as? Column
+        column?.value?.let { it }
+    }
 
-// 기존 MusicianRepository
-interface MusicianRepository: R2dbcRepository<Musician, Long>, CustomMusicianRepository {
-    override fun findById(id: Long): Mono<Musician>
-    fun findAllBy(pageable: Pageable): Flux<Musician>
+    val fieldValues = clazz.memberProperties.mapNotNull { it.name }
+    return if (annotationValues.contains(columnName)) {
+        columnName
+    } else if (fieldValues.contains(columnName)) {
+        toSnakeCaseByUnderscore(columnName)
+    } else {
+        throw BadParameterException("${columnName}이 존재하지 않습니다.")
+    }
 }
 
-// 변경된 MusicianRepository
-interface MusicianRepository: BaseRepository<Musician, Long>, CustomMusicianRepository {
-    override suspend fun findById(id: Long): Musician?
-    fun findAllBy(pageable: Pageable): Flow<Musician>
+fun toSnakeCaseByUnderscore(source: String): String {
+    return reconcatenateCamelCase(source, "_")
 }
 ```
-여기서 `Pageable`을 파라미터로 받는 `findAllBy`의 경우에는 `suspend`가 없고 `Flow`로 감싸진 것을 알 수 있다.
+이런 것을 만든 적이 있는데 스프링 내에서 `@Column`으로 정의된 컬럼 정보가 있으면 그것을 먼저 체크하도록 하고 있기 때문에 그것을 흉내내서 만든 것이다.
 
-내부적으로 이 경우에는 `suspend fun findAllBy(pageable: Pageable): List<Musician>`처럼 하게 되면
+결국 모든 엔티티에 `@Column`을 전부 설정해야 하는가라는 의문이 들 수 있다.
 
-```
-IllegalStateException: Method has to use a either 
-multi-item reactive wrapper return type or a wrapped Page/Slice type.
-```
-위와 같은 에러가 난다.
+하지만 스프링 내에서 빈을 등록할 때 우선 순위를 줄 수 있다. 
 
-아마도 이런 방식으로 지원을 하지 않는 듯 싶다.
-
-이 때 리스트가 아닌 `Flow`로 감싸서 처리하면 된다.
-
-기존의 만든 [CustomMusicianRepository](https://github.com/basquiat78/musicshop/blob/02-using-controller-record/src/main/kotlin/io/basquiat/musicshop/domain/musician/repository/custom/CustomMusicianRepository.kt)와 [CustomMusicianRepositoryImpl](https://github.com/basquiat78/musicshop/blob/02-using-controller-record/src/main/kotlin/io/basquiat/musicshop/domain/musician/repository/custom/impl/CustomMusicianRepositoryImpl.kt)도 변경하자.
+`@Primary`어노테이션을 설정해서 이것을 먼저 사용하도록 만들 수 있는데 이제는 이 방법을 이용해야 한다.
 
 ```kotlin
-interface CustomMusicianRepository {
-    suspend fun updateMusician(musician: Musician, assignments: MutableMap<SqlIdentifier, Any>): Musician
-    fun musiciansByQuery(match: Query): Flow<Musician>
-    suspend fun totalCountByQuery(match: Query): Long
-    suspend fun musicianWithRecords(id: Long): Musician?
+@Configuration
+@ProjectTableCaseFormat(CaseFormat.LOWER_UNDERSCORE)
+@ProjectColumnCaseFormat(CaseFormat.LOWER_UNDERSCORE)
+class QueryDslConfiguration {
+    @Bean
+    fun sqlTemplates() = MySQLTemplates()
+
+    @Bean
+    @Primary
+    fun namingStrategy(): NamingStrategy = object : NamingStrategy {
+        override fun getTableName(type: Class<*>): String = reconcatenateCamelCase(type.simpleName, "_")
+        override fun getColumnName(property: RelationalPersistentProperty) = reconcatenateCamelCase(property.name, "_")
+    }
 }
+```
+그냥 `org.springframework.data.relational.core.mapping`패키지 내의 `NameStrategy`에 있는 코드를 사용할 수 있도록 만들어 버리자.
+
+그리고 모든 `API`를 전부 테스트 해보고 문제가 없는지 꼼꼼히 체크를 한다.
+
+# Using QueryDSL
+
+역시 깃헙의 `README.md`의 가이드 라인을 따른다.
+
+기존의 `BaseRepository`을 이용해서 `NamedQuery`를 사용할 수 있는 것은 사용하고 특별한 경우에는 `R2dbcEntityTemplate`을 이용했다.
+
+먼저 뮤지션의 `Update`부분을 손을 보자.
+
+```kotlin
+interface MusicianQueryDslRepository: QuerydslR2dbcRepository<Musician, Long>
 
 class CustomMusicianRepositoryImpl(
+    private val queryDsl: MusicianQueryDslRepository,
     private val query: R2dbcEntityTemplate,
 ): CustomMusicianRepository {
 
-    override suspend fun updateMusician(musician: Musician, assignments: MutableMap<SqlIdentifier, Any>): Musician {
-        return query.update(Musician::class.java)
-                    .matching(query(where("id").`is`(musician.id!!)))
-                    .apply(Update.from(assignments))
-                    .thenReturn(musician)
-                    .awaitSingle()
+    override suspend fun updateMusician(id: Long, assignments: MutableMap<SqlIdentifier, Any>): Long {
+        return queryDsl.update {
+            it.set(musician.name, "parker")
+                .where(musician.id.eq(id))
+        }.awaitSingle()
     }
 
     override fun musiciansByQuery(match: Query): Flow<Musician> {
         return query.select(Musician::class.java)
-                    .matching(match)
-                    .flow()
+            .matching(match)
+            .flow()
     }
 
     override suspend fun totalCountByQuery(match: Query): Long {
         return query.select(Musician::class.java)
-                    .matching(match)
-                    .count()
-                    .awaitSingle()
+            .matching(match)
+            .count()
+            .awaitSingle()
     }
 
     override suspend fun musicianWithRecords(id: Long): Musician? {
@@ -225,480 +651,463 @@ class CustomMusicianRepositoryImpl(
         """.trimIndent()
 
         return query.databaseClient
-                    .sql(sql)
-                    .bind("id", id)
-                    .fetch()
-                    .all()
-                    .bufferUntilChanged { it["id"] }
-                    .map { rows ->
-                        val musician = Musician(
-                            id = rows[0]["id"]!! as Long,
-                            name = rows[0]["name"]!! as String,
-                            genre = Genre.valueOf(rows[0]["genre"]!! as String),
-                            createdAt = rows[0]["created_at"]?.let { it as LocalDateTime },
-                            updatedAt = rows[0]["updated_at"]?.let { it as LocalDateTime },
-                        )
-                        val records = rows.map {
-                            Record(
-                                id = it["recordId"]!! as Long,
-                                musicianId = rows[0]["id"]!! as Long,
-                                title = it["title"]!! as String,
-                                label = it["label"]!! as String,
-                                releasedType = ReleasedType.valueOf(it["released_type"]!! as String),
-                                releasedYear = it["released_year"]!! as Int,
-                                format = it["format"]!! as String,
-                                createdAt = it["rCreatedAt"]?.let { row -> row as LocalDateTime },
-                                updatedAt = it["rUpdatedAt"]?.let { row -> row as LocalDateTime },
-                            )
-                        }
-                        musician.records = records
-                        musician
-                    }
-                    .awaitFirst()
+            .sql(sql)
+            .bind("id", id)
+            .fetch()
+            .all()
+            .bufferUntilChanged { it["id"] }
+            .map { rows ->
+                val musician = Musician(
+                    id = rows[0]["id"]!! as Long,
+                    name = rows[0]["name"]!! as String,
+                    genre = Genre.valueOf(rows[0]["genre"]!! as String),
+                    createdAt = rows[0]["created_at"]?.let { it as LocalDateTime },
+                    updatedAt = rows[0]["updated_at"]?.let { it as LocalDateTime },
+                )
+                val records = rows.map {
+                    Record(
+                        id = it["recordId"]!! as Long,
+                        musicianId = rows[0]["id"]!! as Long,
+                        title = it["title"]!! as String,
+                        label = it["label"]!! as String,
+                        releasedType = ReleasedType.valueOf(it["released_type"]!! as String),
+                        releasedYear = it["released_year"]!! as Int,
+                        format = it["format"]!! as String,
+                        createdAt = it["rCreatedAt"]?.let { row -> row as LocalDateTime },
+                        updatedAt = it["rUpdatedAt"]?.let { row -> row as LocalDateTime },
+                    )
+                }
+                musician.records = records
+                musician
+            }
+            .awaitFirst()
     }
 
 }
 
 ```
+위 코드는 일단 그냥 예제 코드로 `QuerydslR2dbcRepository`를 사용한 `Repository`를 만들고 주입을 받는다.
 
-여기서도 마찬가지로 `suspend`를 붙여준다.
+`jooQ`와 마찬가지로 업데이트의 경우에는 반환 결과가 `Long`으로 반환한다.
 
-이 때 각 쿼리 로직 이후 `awaitXXX`같은 함수를 통해서 무언가를 처리하고 있다.
+따라서 이것을 사용하는 서비스와 `useCase`도 변경해줘야 한다.
 
-또한 `Flux`의 경우에는 `flow()`함수를 통해서 `Flow<T>`로 처리하는 것을 알 수 있다.
+이 예제 코드에서는 컬럼당 `set`을 하는 구조를 가지고 있지만 이 부분도 리스트로 처리할 수 있도록 다음과 같이 `API`를 제공한다.
 
-이와 관련 `Wawit.kt`에서 해답을 찾을 수 있다.
 ```kotlin
-public suspend fun <T> Publisher<T>.awaitFirst(): T = awaitOne(Mode.FIRST)
-public suspend fun <T> Publisher<T>.awaitFirstOrDefault(default: T): T = awaitOne(Mode.FIRST_OR_DEFAULT, default)
-public suspend fun <T> Publisher<T>.awaitFirstOrNull(): T? = awaitOne(Mode.FIRST_OR_DEFAULT)
-public suspend fun <T> Publisher<T>.awaitFirstOrElse(defaultValue: () -> T): T = awaitOne(Mode.FIRST_OR_DEFAULT) ?: defaultValue()
-public suspend fun <T> Publisher<T>.awaitLast(): T = awaitOne(Mode.LAST)
-public suspend fun <T> Publisher<T>.awaitSingle(): T = awaitOne(Mode.SINGLE)
-@Deprecated public suspend fun <T> Publisher<T>.awaitSingleOrDefault(default: T): T = awaitOne(Mode.SINGLE_OR_DEFAULT, default)
-@Deprecated public suspend fun <T> Publisher<T>.awaitSingleOrNull(): T? = awaitOne(Mode.SINGLE_OR_DEFAULT)
-@Deprecated public suspend fun <T> Publisher<T>.awaitSingleOrElse(defaultValue: () -> T): T = awaitOne(Mode.SINGLE_OR_DEFAULT) ?: defaultValue()
-// more private fun
+@Override
+public C set(List<? extends Path<?>> paths, List<?> values) {
+    for (int i = 0; i < paths.size(); i++) {
+        if (values.get(i) instanceof Expression) {
+            updates.put(paths.get(i), (Expression<?>) values.get(i));
+        } else if (values.get(i) != null) {
+            updates.put(paths.get(i), ConstantImpl.create(values.get(i)));
+        } else {
+            updates.put(paths.get(i), Null.CONSTANT);
+        }
+    }
+    return (C) this;
+}
 ```
-`Publisher<T>`로 부터 `T`객체를 얻는 방식이 마치 코루틴 빌더 `async`와 유사하다.
-
-즉 발행자인 `Mono`, `Flux`로부터 비동기적으로 객체를 가져온다고 생각하면 쉽다.
-
-해당 코드를 따라가다보면 `suspendCancellableCoroutine`를 활용하고 있는데 방식은 `pub/sub`방식으로 처리하고 있는 것을 알 수 있다.
-
-결국 마치 `jpa`나 `queryDSL`처럼 쿼리 이후 가져오는 타입에 따라 `fetch`, `fetchOne`처럼 사용하고 있기 때문에 크게 어려움이 없다.
-
-이제는 서비스 레이어의 코드를 수정해 보자.
-
-# ReadMusicianService 수정
+따라서 다음과 같이
 
 ```kotlin
-@Service
-class ReadMusicianService(
-    private val musicianRepository: MusicianRepository,
+override suspend fun updateMusician(id: Long, assignments: MutableMap<SqlIdentifier, Any>): Long {
+    val paths = listOf(musician.name, musician.genre)
+    val values = listOf("Charlie Parker", Genre.JAZZ.name)
+    return queryDsl.update {
+        it.set(paths, values)
+          .where(musician.id.eq(id))
+    }.awaitSingle()
+}
+```
+사용할 수 있다.
+
+이것을 토대로 다음과 같이 함수의 시그니처와 로직 부분을 수정해야 한다.
+
+```kotlin
+// CustomMusicianRepository
+override suspend fun updateMusician(id: Long, assignments: Pair<List<Path<*>>, List<*>>): Long {
+    return queryDsl.update {
+        it.set(assignments.first, assignments.second)
+          .where(musician.id.eq(id))
+    }.awaitSingle()
+}
+
+// WriteMusicianService
+suspend fun update(id: Long, assignments: Pair<List<Path<*>>, List<*>>): Long {
+    return musicianRepository.updateMusician(id, assignments)
+}
+```
+
+테스트 코드를 수정해 보자.
+
+```kotlin
+@Test
+@DisplayName("musician update using builder test")
+fun updateMusicianTEST() = runTest {
+    // given
+    val id = 1L
+
+    val paths
+        = listOf(musician.name, musician.genre)
+    val values
+        = listOf("Charlie Parker", Genre.JAZZ.name)
+    val assignments
+        = paths to values
+    // when
+    val update = write.update(id, assignments)
+
+    // then
+    assertThat(update).isEqualTo(1)
+}
+```
+사실 이 코드는 `useCase`부터 정보를 받기 때문에 테스트를 위해서는 서비스쪽만 변경하고 진입점의 코드들을 주석처리후 테스트해야 한다.
+
+이제부터 주석처리한 부분도 단계적으로 수정하기 위해 기존에 `UpdateMusician`의 함수들을 수정하고 `useCase`와 컨트롤러 부분을 수정해 보자.
+
+먼저 `UpdateMusician`는 다음과 같이 변경되어야 한다.
+
+```kotlin
+data class UpdateMusician(
+    val name: String? = null,
+    @field:EnumCheck(enumClazz = Genre::class, permitNull = true, message = "genre 필드는 POP, ROCK, HIPHOP, JAZZ, CLASSIC, WORLDMUSIC, ETC 만 가능합니다.")
+    val genre: String? = null,
 ) {
-    fun musicians(pageable: Pageable) = musicianRepository.findAllBy(pageable)
-    suspend fun musicianById(id: Long) = musicianRepository.findById(id)
-    suspend fun musicianByIdOrThrow(id: Long, message: String? = null) = musicianRepository.findByIdOrThrow(id, message)
-    suspend fun totalCount() = musicianRepository.count()
-    fun musiciansByQuery(match: Query) = musicianRepository.musiciansByQuery(match)
-    suspend fun totalCountByQuery(match: Query) = musicianRepository.totalCountByQuery(match)
-    suspend fun musicianWithRecords(id: Long) = musicianRepository.musicianWithRecords(id)
+    fun createAssignments(): Pair<List<Path<*>>, List<Any>> {
+        val paths = mutableListOf<Path<*>>()
+        val value = mutableListOf<Any>()
+        name?.let {
+            isParamBlankThrow(it)
+            paths.add(musician.name)
+            value.add(it)
+        }
+        genre?.let {
+            paths.add(musician.genre)
+            value.add(it)
+        }
+        if(paths.isEmpty() || value.isEmpty()) {
+            throw BadParameterException("업데이트 정보가 누락되었습니다. [name, genre] 정보를 확인하세요.")
+        }
+        return paths to value
+    }
 }
 ```
-기존과의 차이점은 `suspend`가 붙는 다는 점과 `Mono`나 `Flux`아 아닌 객체를 다룰 수 있게 된다는 점이다.
 
-다만 `Pageable`을 사용한 `findAllBy(pageable: Pageable)`함수의 경우에는 `Flow<T>`로 받는다.
-
-이때는 `suspend`가 붙지 않아도 된다.
-
-여기서 `toList()`를 통해 `Iterable<T>`형식으로 변환이 가능하지만 `domain`패키지의 경우에는 이대로 사용한다.
-
-`useCase`작성시 `toList()`로 처리할지 또는 그냥 `Flow<T>`로 컨트롤러를 통해 클라이언트로 보내줄지 결정하도록 하자.
-
-이제부터 이것이 잘 작동하는지 테스트 코드를 작성해 보자.
-
-앞서 우리는 이 테스트를 위해서 그레이들에 `testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")`을 설정했다.
-
-최신 버전은 이 `README.md`이 작성된 시점에 `1.7.1`버전이 최신 버전이다.
-
-여기서 제공하는 `runTest{}`을 통해서 테스팅을 진행한다.
+`useCase`는 다음과 같이 변경하자.
 
 ```kotlin
-@SpringBootTest
-class ReadMusicianServiceTest @Autowired constructor(
-    private val read: ReadMusicianService,
+suspend fun update(id: Long, command: UpdateMusician): Musician {
+    val assignments = command.createAssignments()
+    val updated = write.update(id, assignments)
+    return if(updated == 1L) {
+        read.musicianByIdOrThrow(id)
+    } else {
+        notFound("id [$id]로 조회된 정보가 없습니다.")
+    }
+}
+```
+결과가 `1`이 나온다면 뮤지션 정보를 가져와 보여주고 `0`이라면 아이디에 해당하는 뮤지션정보가 없어 업데이트 수행이 이뤄지지 않기 때문에 에러를 던진다.
+
+# select dynamic query
+`jpa`와 사용할 때는 `QClass`생성시 `@QueryEntitiy`와 `@QueryDelegate`을 사용해서 구성해 볼 수 있다.
+
+하지만 여기서는 그게 되지 않는다. 
+
+아니면 설정방법을 몰라서일 수 있지만 해당 깃헙의 공식 가이드라인에 이런 정보가 없어서 찾지 못했다.
+
+결국 우리는 `BooleanExpression`나 `BooleanBuilder` 또는 `Predicate functional interface`를 사용해야 한다.
+
+여기서는 `BooleanBuilder`를 사용하고자 한다.
+
+먼저 일단 예제 코드를 한번 만들어 보면
+
+```kotlin
+override fun musiciansByQuery(match: Query): Flow<Musician> {
+    return queryDsl.query {
+        it.select(musician)
+            .from(musician)
+    }.flow()
+}
+```
+여러분이 `QueryDSL`을 안다면 이 후 어떤 방식으로 처리할 수 있을지 알 것이다.
+
+어째든 `musiciansByQuery`의 파라미터 정보를 `BooleanBuilder`로 바꾼다면 끝날 것이라는 생각을 할 수 있다.
+
+실제로 저 상태에서 기존에 만든 테스트 코드를 실행한다면 에러는 나겠지만 전체 뮤지션 정보를 가져오는 쿼리가 나가는 것을 볼 수 있다.
+
+또한 정렬의 경우에는 `Q orderBy(OrderSpecifier<?>... o);`처럼 `vararg`로 처리할 수 있도록 리스트로 생성한다.
+
+`jooQ`를 사용할 때처럼 처리하면 될 것이라는 생각을 할 수 있다.
+
+히지만 조건절의 경우에는 `jooQ`처럼 처리하기 힘들다. 
+
+따라서 이와 관련 이것을 처리할 수 있는 유틸을 만들어야 한다.
+
+참고로 이 부분은 사용하고자 한다면 한번 살펴보는 것도 좋다. 
+
+다만 조건 검색이 명확하다면 그다지 큰 내용은 아니다.
+
+먼저 리퀘스트로 넘어온 컬럼 정보를 통해서 `Path`정보를 가져와야 한다.
+
+방법은 `QClass`로부터 컬럼 정보를 가져와 루프를 돌면서 컬럼명과 같은 `Path`를 가져와야 한다.
+
+```kotlne
+val path = qClass.columns.firstOrNull { it.metadata.name == key } ?: throw BadParameterException("column [$key] 정보가 없습니다.")
+```
+즉 `QClass`의 `columns`에 있는 `metadata`정보를 통해서 가져온다.
+
+이때 컬럼의 값은 엔티티에 정의된 변수명에 기인한다.
+
+따라서 리퀘스트로부터 받아야 하는 정보는 엔티티의 변수명에 따라야 한다.
+
+이것을 위해서 
+
+```kotlin
+fun snakeCaseToCamel(source: String): String {
+    val firstCharLower = source[0].lowercase() + source.substring(1)
+    if (source.indexOf("_") < 0) {
+        return firstCharLower
+    }
+    return firstCharLower.split("_")
+                         .mapIndexed { index, value ->
+        if(index == 0) value else StringUtils.capitalize(value)
+    }.joinToString(separator = "")
+
+}
+```
+과 같은 함수를 통해서 넘어온 리퀘스트의 컬럼값을 변경해서 비교할 예정이다.
+
+`QueryDsl`에서 `BooleanExpression`의 코드를 보면 다음과 같은 것을 통해 최종적으로 비교한다.
+
+```java
+public static BooleanOperation booleanOperation(Operator operator, Expression<?>... args) {
+    return predicate(operator, args);
+}
+```
+여기서 `vararg`로 넘어가는 값은 `QueryDsl`의 `Expression<T>`로 정의된 `mixin`과 비교값을 받게 되는데 이 방법을 이용해 공통으로 처리할 예정이다.
+
+또한 위에 `path`를 `QClass`로부터 얻어올 수 있기 때문에 `WhereCondition`을 다음과 같이 변경한다.
+
+즉, `Path<*>`를 받을 것이다.
+
+```kotlin
+data class WhereCondition(
+    val column: Path<*>,
+    val value: Any,
 ) {
-
-    @Test
-    @DisplayName("fetch musician by id")
-    fun musicianByIdTEST() = runTest{
-        // given
-        val id = 1L
-
-        // when
-        val selected = read.musicianById(id)
-
-        // then
-        assertThat(selected!!.name).isEqualTo("Charlie Parker")
-    }
-
-    @Test
-    @DisplayName("fetch musician by id or throw")
-    fun musicianByIdOrThrowTEST() = runTest{
-        // given
-        //val id = 1L
-        val id = 1111L
-
-        // when
-        val selected = read.musicianByIdOrThrow(id)
-
-        // then
-        assertThat(selected!!.name).isEqualTo("Charlie Parker")
-
-    }
-
-    @Test
-    @DisplayName("fetch musicians pagination")
-    fun musiciansTEST() = runTest{
-        // given
-        val pageable = PageRequest.of(0, 3)
-
-        // when
-        val musicians = read.musicians(pageable)
-                            .toList()
-                            .map { it.name }
-        // then
-        assertThat(musicians.size).isEqualTo(3)
-        assertThat(musicians[0]).isEqualTo("Charlie Parker")
-    }
-
-    @Test
-    @DisplayName("total musician count test")
-    fun totalCountTEST() = runTest{
-        // when
-        val count = read.totalCount()
-
-        // then
-        assertThat(count).isEqualTo(10)
-    }
-
-    @Test
-    @DisplayName("musicians list by query test")
-    fun musiciansByQueryTEST() = runTest{
-
-        val list = emptyList<Criteria>()
-
-        // given
-        val match = query(Criteria.from(list)).limit(2).offset(0)
-
-        // when
-        val musicians: List<String> = read.musiciansByQuery(match)
-                                          .toList()
-                                          .map { it.name }
-
-        // then
-        assertThat(musicians.size).isEqualTo(2)
-
-    }
-
-    @Test
-    @DisplayName("total musician count by query test")
-    fun totalCountByQueryTEST() = runTest{
-        // given
-        val match = query(where("genre").isEqual("JAZZ"))
-
-        // when
-        val count = read.totalCountByQuery(match)
-
-        // then
-        assertThat(count).isEqualTo(4)
-    }
-
-    @Test
-    @DisplayName("musician with records test")
-    fun musicianWithRecordsTEST() = runTest{
-        // given
-        val id = 10L
-
-        // when
-        val musician = read.musicianWithRecords(id) ?: notFound()
-
-        // then
-        assertThat(musician.name).isEqualTo("스윙스")
-        assertThat(musician.records!!.size).isEqualTo(5)
-
-    }
-
-}
-
-```
-마치 일반 `Web MVC`을 사용할 때와 크게 다르지 않다는 것을 눈치챘을 것이다.
-
-이제는 이것을 기반으로 `useCase`를 작성해 보자.
-
-# ReadMusicianUseCase 수정
-
-이제부터는 대충 느낌이 올것이다.
-
-```kotlin
-@Service
-class ReadMusicianUseCase(
-    private val read: ReadMusicianService,
-) {
-
-    fun musicianById(id: Long): Mono<Musician> {
-        return read.musicianByIdOrThrow(id)
-    }
-
-    fun musiciansByQuery(queryPage: QueryPage, matrixVariable: MultiValueMap<String, Any>): Mono<Page<Musician>> {
-        val match = createQuery(matrixVariable)
-        return read.musiciansByQuery(queryPage.pagination(match))
-                   .collectList()
-                   .zipWith(read.totalCountByQuery(match))
-                   .map { tuple -> PageImpl(tuple.t1, queryPage.fromPageable(), tuple.t2) }
-    }
-
-}
-```
-위 기존의 코드를 바꿔보도록 하자.
-
-하지만 `musiciansByQuery`에서 사용하고 있는 `zipWith`는 `Mono`에서 제공하는 `API`로 일반적인 코틀린의 컬렉션 함수에서는 존재하지 않는다.
-
-게다가 코틀린의 컬렉션 함수나 자바의 `Stream API`에서 제공하는 `zip`나 `zipWithNext`는 `zipWith`와는 작동 방식이 다르다.
-
-우리는 이것을 이런 방식으로 처리하고 싶은 욕망이 생긴다.
-
-따라서 확장 함수를 통해서 이것을 정의해서 사용하자.
-
-이 방식에 특화된 커스텀 확장 함수를 하나 작성하자.
-
-`CustomExtensions.kt`
-```kotlin
-fun <T, R> Iterable<T>.countZipWith(other: R): Pair<Iterable<T>, R> {
-    return this to other
-}
-
-fun <T, R, S> Pair<Iterable<T>, R>.map(transformer: (Pair<Iterable<T>, R>) -> S): S {
-    return transformer(this)
-}
-```
-`countZipWith`는 페이징 처리를 위해서는 리스트 정보와 전체 카운트 정보를 통해 처리하고 자 할 테니 `Pair`로 반환한다.
-
-따라서 `Pair`에 대해 확장 함수도 같이 작성을 해줘야 한다.
-
-아래는 이것을 적용한 최종 `ReadMusicianUseCase`이다.
-
-```kotlin
-@Service
-class ReadMusicianUseCase(
-    private val read: ReadMusicianService,
-) {
-
-    suspend fun musicianById(id: Long): Musician {
-        return read.musicianByIdOrThrow(id)
-    }
-
-    suspend fun musiciansByQuery(queryPage: QueryPage, matrixVariable: MultiValueMap<String, Any>): Page<Musician> {
-        val match = createQuery(matrixVariable)
-        return read.musiciansByQuery(queryPage.pagination(match))
-                   .toList()
-                   .countZipWith(read.totalCountByQuery(match))
-                   .map { ( musicians, count) -> PageImpl(musicians.toList(), queryPage.fromPageable(), count)}
-    }
-
-}
-```
-테스트 코드는 기존과 크게 다르지 않기 때문에 완료된 테스트 코드는 확인해 보면 될 듯 싶다.
-
-# WriteMusicianService 수정
-
-```kotlin
-@Service
-class WriteMusicianService(
-    private val musicianRepository: MusicianRepository,
-) {
-    fun create(musician: Musician): Mono<Musician> {
-        return musicianRepository.save(musician)
-    }
-    fun update(musician: Musician, assignments: MutableMap<SqlIdentifier, Any>): Mono<Musician> {
-        return musicianRepository.updateMusician(musician, assignments)
-    }
-}
-```
-이제는 너무 익숙해지기 시작한다.
-
-```kotlin
-@Service
-class WriteMusicianService(
-    private val musicianRepository: MusicianRepository,
-) {
-    suspend fun create(musician: Musician): Musician {
-        return musicianRepository.save(musician)
-    }
-    suspend fun update(musician: Musician, assignments: MutableMap<SqlIdentifier, Any>): Musician {
-        return musicianRepository.updateMusician(musician, assignments)
-    }
-}
-```
-당연히 우리는 테스트 코드를 수행해야 한다.
-
-이 때 `rollBack`은 기존의 코드를 좀 수정해야 한다.
-
-```kotlin
-@Component
-class Transaction (
-    transactionalOperator: TransactionalOperator
-) {
-    init {
-        Companion.transactionalOperator = transactionalOperator
-    }
     companion object {
-        lateinit var transactionalOperator: TransactionalOperator
-        suspend fun <T, S> withRollback(value: T, receiver: suspend (T) -> S): S {
-            return transactionalOperator.executeAndAwait {
-                it.setRollbackOnly()
-                receiver(value)
-            }
-        }
-
-        suspend fun withRollback(receiver: suspend () -> Unit) {
-            return transactionalOperator.executeAndAwait {
-                it.setRollbackOnly()
-                receiver()
-            }
+        fun from(key: Path<*>, value: Any): WhereCondition {
+            return WhereCondition(
+                column = key,
+                value = value
+            )
         }
     }
 }
 ```
-이것을 이용해 롤백 테스트를 진행하자.
+
+`ConditionType`을 통해서 `BooleanExpression`정보를 얻어오기 때문에
 
 ```kotlin
-@SpringBootTest
-class WriteMusicianServiceTest @Autowired constructor(
-    private val read: ReadMusicianService,
-    private val write: WriteMusicianService,
+enum class ConditionType(
+    val code: String,
+    private val booleanBuilder: (WhereCondition) -> BooleanExpression
 ) {
+    LTE("lte", { Expressions.booleanOperation(Ops.LOE, it.column, ConstantImpl.create(it.value)) }),
+    LT("lt", { Expressions.booleanOperation(Ops.LT, it.column, ConstantImpl.create(it.value)) }),
+    GTE("gte", { Expressions.booleanOperation(Ops.GOE, it.column, ConstantImpl.create(it.value)) }),
+    GT("gt", { Expressions.booleanOperation(Ops.GT, it.column, ConstantImpl.create(it.value)) }),
+    EQ("eq", { Expressions.booleanOperation(Ops.EQ, it.column, ConstantImpl.create(it.value)) }),
+    LIKE("like", { Expressions.booleanOperation(Ops.STRING_CONTAINS, it.column, ConstantImpl.create(it.value)) });
 
-    @Test
-    @DisplayName("musician create test")
-    fun createMusicianTEST() = runTest {
-        // given
-        val createdMusician = Musician(name = "taasaaa", genre = Genre.HIPHOP)
-        
-        // when
-        val musician = Transaction.withRollback(createdMusician) { 
-            write.create(it) 
-        }
-        
-        // then
-        assertThat(musician.id).isGreaterThan(0)
+    fun getBooleanBuilder(condition: WhereCondition): BooleanExpression {
+        return booleanBuilder(condition)
     }
 
-    @Test
-    @DisplayName("musician update using builder test")
-    fun updateMusicianTEST() = runTest {
-        // given
-        val id = 1L
-        
-        val command = UpdateMusician(name = "Charlie Parker", genre = "POP")
-        
-        val target = read.musicianByIdOrThrow(1)
-        
-        val (musician, assignments) = command.createAssignments(target)
-        
-        // when
-        val update = Transaction.withRollback(id) {
-            write.update(musician, assignments)
-            read.musicianById(id)!!
-        }
-        
-        // then
-        assertThat(update.genre).isEqualTo(Genre.POP)
+    companion object {
+        /**
+         * null이면 EQ를 던진다.
+         * @param code
+         * @return ConditionType
+         */
+        fun of(code: String): ConditionType = values().firstOrNull { conditionType-> conditionType.code.equals(code, ignoreCase = true) }
+            ?: EQ
     }
 
 }
 ```
-
-# WriteMusicianUseCase 수정 및 MusicianController 완성
+이제는 마지막 `CriteriaBuilder`를 마무리한다.
 
 ```kotlin
-@Service
-class WriteMusicianUseCase(
-    private val read: ReadMusicianService,
-    private val write: WriteMusicianService,
-) {
+fun <T: RelationalPathBase<*>> pagination(qClass: T): Pair<List<OrderSpecifier<*>>, PageRequest> {
+    val pathBuilder = PathBuilder<Any>(qClass.type.javaClass, qClass.toString())
+    val sortFields = if (column != null && sort != null) {
+        qClass.columns.firstOrNull { it.metadata.name == snakeCaseToCamel(column) }
+            ?: throw BadParameterException("column [$column] 정보가 없습니다.")
 
-    suspend fun insert(command: CreateMusician): Musician {
-        val created = Musician(name = command.name, genre = Genre.valueOf(command.genre))
-        return write.create(created)
+        val field = pathBuilder.get(toSnakeCaseByUnderscore(column)) as Expression<out Comparable<*>>
+        when (Sort.Direction.valueOf(sort.uppercase())) {
+            Sort.Direction.DESC -> listOf(OrderSpecifier(Order.DESC, field))
+            else -> listOf(OrderSpecifier(Order.ASC, field))
+        }
+    } else {
+        emptyList()
     }
+    return sortFields to PageRequest.of(offset, limit)
+}
+```
+`QueryPage`도 수정한다.
 
-    suspend fun update(id: Long, command: UpdateMusician): Musician {
-        val selected = read.musicianByIdOrThrow(id)
-        val (musician, assignments) = command.createAssignments(selected)
-        write.update(musician, assignments)
-        return read.musicianById(id)!!
-    }
+다만 이때 컬럼 정보가 엔티티에 있는지 조회를 하고 `field`정보를 가져올 때 `toSnakeCaseByUnderscore`로 변경해서 가져와야 한다.
 
+그렇지 않으면 `unknown field`에러가 발생하기 때문이다.
+
+이 방법을 사용하면 최종적으로 다음과 같이
+
+```kotlin
+override fun musiciansByQuery(condition: BooleanBuilder, pagination: Pair<List<OrderSpecifier<*>>, PageRequest>): Flow<Musician> {
+    return queryDsl.query {
+        it.select(musician)
+          .from(musician)
+          .where(condition)
+          .orderBy(*pagination.first.toTypedArray())
+          .limit(pagination.second.pageSize.toLong())
+          .offset(pagination.second.offset)
+    }.flow()
 }
 
-@RestController
-@RequestMapping("/api/v1/musicians")
-class MusicianController(
-    private val readMusicianUseCase: ReadMusicianUseCase,
-    private val writeMusicianUseCase: WriteMusicianUseCase,
+override suspend fun totalCountByQuery(condition: BooleanBuilder): Long {
+    return queryDsl.query {
+        it.select(musician.id.count())
+          .from(musician)
+          .where(condition)
+    }.awaitSingle()
+}
+```
+사용할 수 있다.
+
+# one-to-many or many-to-one
+`jooQ`와 달리 이런 연관관계를 갖는 경우에는 `dto`를 생성해서 만들어야 한다.
+
+원래는 `dto`로 반환하는 방식이 가장 무난하겠지만 여기서는 그런 방식을 딱히 고수하지 않을 것이다.
+
+프로젝션 방식을 통해 `dto`로 생성하고 `dto`로부터 엔티티를 반환하도록 만들 예정이기 때문이다.
+
+# 꼭 이렇게까지 만들 필요가 있을까?
+
+이건 단지 이런 방식으로도 접근할 수 있다는 정도에서도 충분하다.
+
+이보다는 구현 `API`, 즉 요구사항에 맞춰 잘 구현하면 되는 일일 것이다.
+
+어째든 시도한 김에 끝까지 가보자.
+
+## 삽질의 시작? 이것도??????
+
+`MusicianDto`클래스는 정보를 받아서 엔티티로 보내기 위해 작성된 것이다.
+
+이 방식을 꼭 따라할 필요가 없다는 것을 다시 한번 말씀드리면서
+```kotlin
+data class MusicianDto(
+    val id: Long,
+    val name: String,
+    val genre: Genre,
+    val createdAt: LocalDateTime,
+    val updatedAt: LocalDateTime?,
+    val recordId: Long,
+    val title: String,
+    val label: String,
+    val releasedType: ReleasedType,
+    val releasedYear: Int,
+    val format: String,
+    val recordCreatedAt: LocalDateTime,
+    val recordUpdatedAt: LocalDateTime?,
 ) {
-
-    @GetMapping("/query/{queryCondition}")
-    @ResponseStatus(HttpStatus.OK)
-    suspend fun fetchMusicians(
-        @Valid queryPage: QueryPage,
-        @MatrixVariable(pathVar = "queryCondition", required = false) matrixVariable: MultiValueMap<String, Any>
-    ): Page<Musician> {
-        return readMusicianUseCase.musiciansByQuery(queryPage, matrixVariable)
+    fun toMusician(): Musician {
+        return Musician(
+            id = id,
+            name = name,
+            genre = genre,
+            createdAt = createdAt,
+            updatedAt = updatedAt,
+        )
     }
 
-    @GetMapping("/{id}")
-    @ResponseStatus(HttpStatus.OK)
-    suspend fun fetchMusician(@PathVariable("id") id: Long): Musician {
-        return readMusicianUseCase.musicianById(id)
-    }
-
-    @PostMapping("")
-    @ResponseStatus(HttpStatus.CREATED)
-    suspend fun createMusician(@RequestBody @Valid command: CreateMusician): Musician {
-        return writeMusicianUseCase.insert(command)
-    }
-
-    @PatchMapping("/{id}")
-    @ResponseStatus(HttpStatus.OK)
-    suspend fun updateMusician(@PathVariable("id") id: Long, @RequestBody command: UpdateMusician): Musician {
-        return writeMusicianUseCase.update(id, command)
+    fun toRecord(): Record {
+        return Record(
+            id = recordId,
+            musicianId = id,
+            title = title,
+            label = label,
+            releasedType = releasedType,
+            releasedYear = releasedYear,
+            format = format,
+            createdAt = recordCreatedAt,
+            updatedAt = recordUpdatedAt,
+        )
     }
 
 }
 ```
-테스트 코드는 전부 완료했으니 확인을 하면 될 것이다.
 
-# Record 관련 수정 작업
+```kotlin
 
-아마도 똑같은 설명을 반복하게 될 것이다.
 
-완성된 코드와 테스트 코드를 살펴보면 될것이라는 한줄로 마무리할까 한다.
+override suspend fun musicianWithRecords(id: Long): Musician {
+    val dtoList =  queryDsl.query {
+        it.select(
+            Projections.constructor(MusicianDto::class.java,
+                musician.id,
+                musician.name,
+                musician.genre,
+                musician.createdAt,
+                musician.updatedAt,
+                record.id.`as`("record_id"),
+                record.title,
+                record.label,
+                record.releasedType,
+                record.releasedYear,
+                record.format,
+                record.createdAt.`as`("record_created_at"),
+                record.updatedAt.`as`("record_updated_at")
+            )
+        )
+        .from(musician)
+        .innerJoin(record).on(musician.id.eq(record.musicianId))
+        .where(musician.id.eq(id))
+    }.flow().toList()
+    if(dtoList.isEmpty()) notFound("뮤지션 아이디 [$id]로 조회된 정보가 없습니다.")
+    val musician = dtoList[0].toMusician()
+    val records = dtoList.map { it.toRecord() }
+    musician.records = records
+    return musician
+}
+```
+뮤지션과 레코드의 아이디와 생성일과 수정일은 중복이 되기 때문에 별칭을 주게 되어 있다.
+
+쿼리를 생성해 날릴 때는 별칭으로 날아간다.
+
+하지만 실제 `R2dbcMappingContext`로부터 프로퍼티를 생성하고 `readFrom`을 통해서 매핑을 하게 되어 있다.
+
+이 때도 이 별칭도 `NameStrategy`의 영향을 받기 때문에 관례적으로 `recordId`처럼 별칭을 주게 되면 매핑을 할 수 없어 `null`값으로 세팅이 되어 버린다.
+
+따라서 별칭도 위와 같이 스네이크 언더스코어 방식으로 줘야 한다.
+
+
+# Record 수정
+
+방식은 똑같기 때문에 완성된 코드는 전체 코드를 살펴보면 될것이다.
+
+최종적으로 수정된 코드는 전체 코드에서 확인해 보도록 하자!
 
 # At a Glance
 
-자바하시는 분들에게는 미안하지만 이런 이점을 누릴 수는 없다.
+일단 `jooQ`에 비하면 사용하는 방식이 약간은 조잡하다는 느낌을 지울 수 없다. 
 
-어째든 코틀린의 코루틴을 활용하는 이 방식은 `WebFlux`을 접하는데 상당한 이점을 제공한다.
+게다가 `NameStrategy`에 따른 컬럼 매핑을 염두해 둬야 하기 때문에 디테일한 부분에 손이 많이 간다.
 
-기존의 방식을 그대로 누릴 수 있기 때문이다.
+아직은 공식 라이브러리가 아니기 때문에 그럴 수 있고 차후 좋아지거나 공식 서포터로 포함될 수 있는 부분을 염두해 두고 사용해 보면 좋을 듯 싶다.
 
-다음은 마지막으로 `functional endpoints`를 이용한 방식을 다루고자 한다.
 
-이미 지금까지 잘 따라오신 분들이라면 이 방식 역시 크게 다르지 않을 것이다.
 
-다만 `FunctionRouter`에서 살짝 변경될 것인데 이마저도 바꿀 게 없다.
 
-그 내용은 다음 브랜치에서 확인해 보자.

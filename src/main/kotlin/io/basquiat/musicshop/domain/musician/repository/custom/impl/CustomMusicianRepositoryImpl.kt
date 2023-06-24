@@ -1,98 +1,84 @@
 package io.basquiat.musicshop.domain.musician.repository.custom.impl
 
-import io.basquiat.musicshop.domain.musician.model.code.Genre
+import com.infobip.spring.data.r2dbc.QuerydslR2dbcRepository
+import com.querydsl.core.BooleanBuilder
+import com.querydsl.core.types.OrderSpecifier
+import com.querydsl.core.types.Path
+import com.querydsl.core.types.Projections
+import io.basquiat.musicshop.common.utils.notFound
+import io.basquiat.musicshop.domain.musician.model.MusicianDto
 import io.basquiat.musicshop.domain.musician.model.entity.Musician
+import io.basquiat.musicshop.domain.musician.model.entity.QMusician.musician
 import io.basquiat.musicshop.domain.musician.repository.custom.CustomMusicianRepository
-import io.basquiat.musicshop.domain.record.model.code.ReleasedType
-import io.basquiat.musicshop.domain.record.model.entity.Record
+import io.basquiat.musicshop.domain.record.model.entity.QRecord.record
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.reactive.awaitFirst
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.reactive.awaitSingle
-import org.springframework.data.r2dbc.core.R2dbcEntityTemplate
-import org.springframework.data.r2dbc.core.flow
-import org.springframework.data.relational.core.query.Criteria.where
-import org.springframework.data.relational.core.query.Query
-import org.springframework.data.relational.core.query.Query.query
-import org.springframework.data.relational.core.query.Update
-import org.springframework.data.relational.core.sql.SqlIdentifier
-import java.time.LocalDateTime
+import org.springframework.data.domain.PageRequest
+import org.springframework.r2dbc.core.awaitSingle
+import org.springframework.r2dbc.core.flow
+
+
+interface MusicianQueryDslRepository: QuerydslR2dbcRepository<Musician, Long>
 
 class CustomMusicianRepositoryImpl(
-    private val query: R2dbcEntityTemplate,
+    private val queryDsl: MusicianQueryDslRepository,
 ): CustomMusicianRepository {
 
-    override suspend fun updateMusician(musician: Musician, assignments: MutableMap<SqlIdentifier, Any>): Musician {
-        return query.update(Musician::class.java)
-                    .matching(query(where("id").`is`(musician.id!!)))
-                    .apply(Update.from(assignments))
-                    .thenReturn(musician)
-                    .awaitSingle()
+    override suspend fun updateMusician(id: Long, assignments: Pair<List<Path<*>>, List<Any>>): Long {
+        return queryDsl.update {
+            it.set(assignments.first, assignments.second)
+              .where(musician.id.eq(id))
+        }.awaitSingle()
     }
 
-    override fun musiciansByQuery(match: Query): Flow<Musician> {
-        return query.select(Musician::class.java)
-                    .matching(match)
-                    .flow()
+    override fun musiciansByQuery(condition: BooleanBuilder, pagination: Pair<List<OrderSpecifier<*>>, PageRequest>): Flow<Musician> {
+        return queryDsl.query {
+            it.select(musician)
+              .from(musician)
+              .where(condition)
+              .orderBy(*pagination.first.toTypedArray())
+              .limit(pagination.second.pageSize.toLong())
+              .offset(pagination.second.offset)
+        }.flow()
     }
 
-    override suspend fun totalCountByQuery(match: Query): Long {
-        return query.select(Musician::class.java)
-                    .matching(match)
-                    .count()
-                    .awaitSingle()
+    override suspend fun totalCountByQuery(condition: BooleanBuilder): Long {
+        return queryDsl.query {
+            it.select(musician.id.count())
+              .from(musician)
+              .where(condition)
+        }.awaitSingle()
     }
 
-    override suspend fun musicianWithRecords(id: Long): Musician? {
-        var sql = """
-            SELECT musician.id,
-                   musician.name,
-                   musician.genre,
-                   musician.created_at,         
-                   musician.updated_at,         
-                   record.id AS recordId,
-                   record.title,
-                   record.label,
-                   record.released_type,
-                   record.released_year,
-                   record.format,
-                   record.created_at AS rCreatedAt,
-                   record.updated_at AS rUpdatedAt
-            FROM musician
-            LEFT OUTER JOIN record ON musician.id = record.musician_id
-            WHERE musician.id = :id
-        """.trimIndent()
-
-        return query.databaseClient
-                    .sql(sql)
-                    .bind("id", id)
-                    .fetch()
-                    .all()
-                    .bufferUntilChanged { it["id"] }
-                    .map { rows ->
-                        val musician = Musician(
-                            id = rows[0]["id"]!! as Long,
-                            name = rows[0]["name"]!! as String,
-                            genre = Genre.valueOf(rows[0]["genre"]!! as String),
-                            createdAt = rows[0]["created_at"]?.let { it as LocalDateTime },
-                            updatedAt = rows[0]["updated_at"]?.let { it as LocalDateTime },
-                        )
-                        val records = rows.map {
-                            Record(
-                                id = it["recordId"]!! as Long,
-                                musicianId = rows[0]["id"]!! as Long,
-                                title = it["title"]!! as String,
-                                label = it["label"]!! as String,
-                                releasedType = ReleasedType.valueOf(it["released_type"]!! as String),
-                                releasedYear = it["released_year"]!! as Int,
-                                format = it["format"]!! as String,
-                                createdAt = it["rCreatedAt"]?.let { row -> row as LocalDateTime },
-                                updatedAt = it["rUpdatedAt"]?.let { row -> row as LocalDateTime },
-                            )
-                        }
-                        musician.records = records
-                        musician
-                    }
-                    .awaitFirst()
+    override suspend fun musicianWithRecords(id: Long): Musician {
+        val dtoList =  queryDsl.query {
+            it.select(
+                Projections.constructor(MusicianDto::class.java,
+                    musician.id,
+                    musician.name,
+                    musician.genre,
+                    musician.createdAt,
+                    musician.updatedAt,
+                    record.id.`as`("record_id"),
+                    record.title,
+                    record.label,
+                    record.releasedType,
+                    record.releasedYear,
+                    record.format,
+                    record.createdAt.`as`("record_created_at"),
+                    record.updatedAt.`as`("record_updated_at")
+                )
+            )
+            .from(musician)
+            .innerJoin(record).on(musician.id.eq(record.musicianId))
+            .where(musician.id.eq(id))
+        }.flow().toList()
+        if(dtoList.isEmpty()) notFound("뮤지션 아이디 [$id]로 조회된 정보가 없습니다.")
+        val musician = dtoList[0].toMusician()
+        val records = dtoList.map { it.toRecord() }
+        musician.records = records
+        return musician
     }
 
 }

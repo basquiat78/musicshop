@@ -1,11 +1,13 @@
 package io.basquiat.musicshop.common.model.request
 
+import com.querydsl.core.types.Path
+
 data class WhereCondition(
-    val column: String,
+    val column: Path<*>,
     val value: Any,
 ) {
     companion object {
-        fun from(key: String, value: Any): WhereCondition {
+        fun from(key: Path<*>, value: Any): WhereCondition {
             return WhereCondition(
                 column = key,
                 value = value

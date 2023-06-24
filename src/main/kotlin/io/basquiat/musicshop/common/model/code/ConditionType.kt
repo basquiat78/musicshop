@@ -1,28 +1,24 @@
 package io.basquiat.musicshop.common.model.code
 
+import com.querydsl.core.types.ConstantImpl
+import com.querydsl.core.types.Ops
+import com.querydsl.core.types.dsl.BooleanExpression
+import com.querydsl.core.types.dsl.Expressions
 import io.basquiat.musicshop.common.model.request.WhereCondition
-import org.springframework.data.relational.core.query.Criteria
-import org.springframework.data.relational.core.query.Criteria.where
-import org.springframework.data.relational.core.query.isEqual
 
 enum class ConditionType(
     val code: String,
-    private val native: (String, WhereCondition) -> String,
-    private val criteria: (WhereCondition) -> Criteria
+    private val booleanBuilder: (WhereCondition) -> BooleanExpression
 ) {
-    LTE("lte", { prefix, it -> "AND ${prefix}.${it.column} <= '${it.value}'" }, { where(it.column).lessThanOrEquals(it.value)}),
-    LT("lt", { prefix, it -> "AND ${prefix}.${it.column} < '${it.value}'" }, { where(it.column).lessThan(it.value)}),
-    GTE("gte", { prefix, it -> "AND ${prefix}.${it.column} >= '${it.value}'" }, { where(it.column).greaterThanOrEquals(it.value)}),
-    GT("gt", { prefix, it -> "AND ${prefix}.${it.column} > '${it.value}'" }, { where(it.column).greaterThan(it.value)}),
-    EQ("eq", { prefix, it -> "AND ${prefix}.${it.column} = '${it.value}'" }, { where(it.column).isEqual(it.value)}),
-    LIKE("like", { prefix, it -> "AND ${prefix}.${it.column} like '%${it.value}%'" }, { where(it.column).like("%${it.value}%")});
+    LTE("lte", { Expressions.booleanOperation(Ops.LOE, it.column, ConstantImpl.create(it.value)) }),
+    LT("lt", { Expressions.booleanOperation(Ops.LT, it.column, ConstantImpl.create(it.value)) }),
+    GTE("gte", { Expressions.booleanOperation(Ops.GOE, it.column, ConstantImpl.create(it.value)) }),
+    GT("gt", { Expressions.booleanOperation(Ops.GT, it.column, ConstantImpl.create(it.value)) }),
+    EQ("eq", { Expressions.booleanOperation(Ops.EQ, it.column, ConstantImpl.create(it.value)) }),
+    LIKE("like", { Expressions.booleanOperation(Ops.STRING_CONTAINS, it.column, ConstantImpl.create(it.value)) });
 
-    fun getCriteria(condition: WhereCondition): Criteria {
-        return criteria(condition)
-    }
-
-    fun getNativeSql(prefix: String, condition: WhereCondition): String {
-        return native(prefix, condition)
+    fun getBooleanBuilder(condition: WhereCondition): BooleanExpression {
+        return booleanBuilder(condition)
     }
 
     companion object {
