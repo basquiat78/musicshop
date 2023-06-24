@@ -16,7 +16,7 @@ class ReadMusicianUseCaseTest @Autowired constructor(
 
 	@Test
 	@DisplayName("musicianById test")
-	fun musicianByIdTEST() = runTest{
+	fun musicianByIdTEST() = runTest {
 		// given
 		val id = 1L
 
@@ -29,7 +29,7 @@ class ReadMusicianUseCaseTest @Autowired constructor(
 
 	@Test
 	@DisplayName("musicians By Query test")
-	fun musiciansByQueryTEST() = runTest{
+	fun musiciansByQueryTEST() = runTest {
 		// given
 		val query = QueryPage(1, 10, column = "id", sort = "DESC")
 		val matrixVariable = LinkedMultiValueMap<String, Any>()

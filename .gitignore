@@ -3,3 +3,8 @@
 /build/
 /gradle/
 /.gradle/
+/buildSrc/.gradle/
+/buildSrc/gradle/
+/buildSrc/build/
+/custom-strategy/build/
+/out/
