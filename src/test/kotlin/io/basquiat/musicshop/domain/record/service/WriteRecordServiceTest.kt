@@ -1,8 +1,9 @@
 package io.basquiat.musicshop.domain.record.service
 
-import io.basquiat.musicshop.common.exception.BadParameterException
+import com.querydsl.core.types.Path
 import io.basquiat.musicshop.domain.record.model.code.RecordFormat
 import io.basquiat.musicshop.domain.record.model.code.ReleasedType
+import io.basquiat.musicshop.domain.record.model.entity.QRecord.record
 import io.basquiat.musicshop.domain.record.model.entity.Record
 import kotlinx.coroutines.test.runTest
 import org.assertj.core.api.Assertions.assertThat
@@ -10,15 +11,8 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.data.relational.core.sql.SqlIdentifier
-import org.springframework.test.context.TestExecutionListeners
-import org.springframework.test.context.transaction.TransactionalTestExecutionListener
 
 @SpringBootTest
-@TestExecutionListeners(
-	listeners = [TransactionalTestExecutionListener::class],
-	mergeMode = TestExecutionListeners.MergeMode.MERGE_WITH_DEFAULTS
-)
 class WriteRecordServiceTest @Autowired constructor(
 	private val read: ReadRecordService,
 	private val write: WriteRecordService,
@@ -49,25 +43,20 @@ class WriteRecordServiceTest @Autowired constructor(
 	@DisplayName("record update using builder test")
 	fun updateRecordTEST() = runTest {
 		// given
-		val target = read.recordByIdOrThrow(24)
+		val id = 1L
 
-		val id = target.id!!
-		val title = "Pres Lives!"
+		val paths = mutableListOf<Path<*>>()
+		paths.add(record.title)
+		val values = mutableListOf<Any>()
+		values.add("Now's The Time")
 
-		val assignments = mutableMapOf<SqlIdentifier, Any>()
-		title?.let {
-			assignments[SqlIdentifier.unquoted("title")] = it
-		}
-		if(assignments.isEmpty()) {
-			throw BadParameterException("업데이트 정보가 누락되었습니다. [name, genre] 정보를 확인하세요.")
-		}
+		val assignments= paths to values
 
 		// when
-		write.update(target, assignments)
-		val updated = read.recordById(target.id!!)!!
+		val updated = write.update(id, assignments)
 
 		// then
-		assertThat(updated.title).isEqualTo(title)
+		assertThat(updated).isEqualTo(1L)
 	}
 
 }

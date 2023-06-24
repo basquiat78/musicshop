@@ -42,7 +42,7 @@ class MusicianController(
 
     @PatchMapping("/{id}")
     @ResponseStatus(HttpStatus.OK)
-    suspend fun updateMusician(@PathVariable("id") id: Long, @RequestBody command: UpdateMusician): Musician {
+    suspend fun updateMusician(@PathVariable("id") id: Long, @RequestBody @Valid command: UpdateMusician): Musician {
         return writeMusicianUseCase.update(id, command)
     }
 

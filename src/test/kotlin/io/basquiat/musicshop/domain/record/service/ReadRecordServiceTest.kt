@@ -1,5 +1,8 @@
 package io.basquiat.musicshop.domain.record.service
 
+import io.basquiat.musicshop.common.builder.createQuery
+import io.basquiat.musicshop.common.model.request.QueryPage
+import io.basquiat.musicshop.domain.record.model.entity.QRecord.record
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.assertj.core.api.Assertions.assertThat
@@ -8,6 +11,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.data.domain.PageRequest
+import org.springframework.util.LinkedMultiValueMap
 
 @SpringBootTest
 class ReadRecordServiceTest @Autowired constructor(
@@ -61,32 +65,19 @@ class ReadRecordServiceTest @Autowired constructor(
 	@DisplayName("allRecords test")
 	fun allRecordsTEST() = runTest {
 		// given
-		val whereClause = "AND record.musician_id = 10"
-		val orderClause = "ORDER BY record.released_year DESC"
-		val limitClause = "LIMIT 10"
+		val matrixVariable = LinkedMultiValueMap<String, Any>()
+		matrixVariable.put("title", listOf("like", "파급"))
+		val condition = createQuery(matrixVariable, record)
+		val queryPage = QueryPage(size = 10, page = 1)
 
 		// when
-		val recordTitle = read.allRecords(whereClause, orderClause, limitClause)
+		val recordTitle = read.allRecords(condition, queryPage.pagination(record))
 									  .toList()
 									  .map { it.title }
 									  .first()
 
 		// then
-		assertThat(recordTitle).isEqualTo("Upgrade IV")
-	}
-
-	@Test
-	@DisplayName("records test")
-	fun recordsTEST() = runTest {
-		// given
-
-		// when
-		val recordTitle = read.records()
-									  .toList()
-									  .map { it.title }
-									  .first()
-		// then
-		assertThat(recordTitle).isEqualTo("Now's The Time")
+		assertThat(recordTitle).isEqualTo("파급효과 (Ripple Effect)")
 	}
 
 }

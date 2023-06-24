@@ -16,7 +16,7 @@ class ReadMusicianUseCaseTest @Autowired constructor(
 
 	@Test
 	@DisplayName("musicianById test")
-	fun musicianByIdTEST() = runTest{
+	fun musicianByIdTEST() = runTest {
 		// given
 		val id = 1L
 
@@ -40,8 +40,8 @@ class ReadMusicianUseCaseTest @Autowired constructor(
 												   .content
 												   .map { it.name }
 		// then
-		assertThat(musiciansName.size).isEqualTo(5)
-		assertThat(musiciansName[0]).isEqualTo("Coleman Hawkins")
+		assertThat(musiciansName.size).isEqualTo(9)
+		assertThat(musiciansName[0]).isEqualTo("Lester Young")
 
 	}
 

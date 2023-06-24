@@ -44,11 +44,13 @@ class ReadRecordUseCaseTest @Autowired constructor(
 		// then
 		assertThat(recordTitle).isEqualTo("파급효과 (Ripple Effect)")
 	}
+
 	@Test
 	@DisplayName("allRecords test")
 	fun allRecordsTEST() = runTest {
+
 		// given
-		val queryPage = QueryPage(size = 10, page = 1, column = "releasedYear", sort = "desc")
+		val queryPage = QueryPage(size = 10, page = 1, column = "released_year", sort = "desc")
 		val matrixVariables = LinkedMultiValueMap<String, Any>()
 		matrixVariables.put("musicianId", listOf("eq", 10))
 
@@ -61,4 +63,5 @@ class ReadRecordUseCaseTest @Autowired constructor(
 		// then
 		assertThat(recordTitle).isEqualTo("Upgrade IV")
 	}
+
 }

@@ -2,6 +2,7 @@ package io.basquiat.musicshop.api.usecase.record
 
 import io.basquiat.musicshop.api.usecase.record.model.CreateRecord
 import io.basquiat.musicshop.api.usecase.record.model.UpdateRecord
+import io.basquiat.musicshop.common.utils.notFound
 import io.basquiat.musicshop.domain.musician.service.ReadMusicianService
 import io.basquiat.musicshop.domain.record.model.code.ReleasedType
 import io.basquiat.musicshop.domain.record.model.entity.Record
@@ -30,10 +31,13 @@ class WriteRecordUseCase(
     }
 
     suspend fun update(id: Long, command: UpdateRecord): Record {
-        val target = read.recordByIdOrThrow(id)
-        val (record, assignments) = command.createAssignments(target)
-        write.update(record, assignments)
-        return read.recordById(id)!!
+        val assignments = command.createAssignments()
+        val updated = write.update(id, assignments)
+        return if(updated == 1L) {
+            read.recordByIdOrThrow(id)
+        } else {
+            notFound("id [$id]로 조회된 정보가 없습니다.")
+        }
     }
 
 }

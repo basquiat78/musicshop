@@ -1,9 +1,11 @@
 package io.basquiat.musicshop.api.usecase.record.model
 
+import com.querydsl.core.types.Path
 import io.basquiat.musicshop.common.constraint.EnumCheck
+import io.basquiat.musicshop.common.exception.BadParameterException
+import io.basquiat.musicshop.common.utils.isParamBlankThrow
 import io.basquiat.musicshop.domain.record.model.code.ReleasedType
-import io.basquiat.musicshop.domain.record.model.entity.Record
-import org.springframework.data.relational.core.sql.SqlIdentifier
+import io.basquiat.musicshop.domain.record.model.entity.QRecord.record
 
 data class UpdateRecord(
     val title: String? = null,
@@ -13,28 +15,35 @@ data class UpdateRecord(
     var releasedYear: Int? = null,
     var format: String? = null,
 ) {
-    fun createAssignments(record: Record): Pair<Record, MutableMap<SqlIdentifier, Any>> {
-        val assignments = mutableMapOf<SqlIdentifier, Any>()
+    fun createAssignments(): Pair<List<Path<*>>, List<Any>> {
+        val paths = mutableListOf<Path<*>>()
+        val value = mutableListOf<Any>()
         title?.let {
-            assignments[SqlIdentifier.unquoted("title")] = it
-            record.title = it
+            isParamBlankThrow(it)
+            paths.add(record.title)
+            value.add(it)
         }
         label?.let {
-            assignments[SqlIdentifier.unquoted("label")] = it
-            record.label = it
+            paths.add(record.label)
+            value.add(it)
         }
         releasedType?.let {
-            assignments[SqlIdentifier.unquoted("releasedType")] = it
-            record.releasedType = ReleasedType.valueOf(it.uppercase())
+            isParamBlankThrow(it)
+            paths.add(record.releasedType)
+            value.add(it)
         }
         releasedYear?.let {
-            assignments[SqlIdentifier.unquoted("releasedYear")] = it
-            record.releasedYear = it
+            paths.add(record.releasedYear)
+            value.add(it)
         }
         format?.let {
-            assignments[SqlIdentifier.unquoted("format")] = it
-            record.format = it
+            isParamBlankThrow(it)
+            paths.add(record.format)
+            value.add(it)
         }
-        return record to assignments
+        if(paths.isEmpty() || value.isEmpty()) {
+            throw BadParameterException("업데이트 정보가 누락되었습니다. [title, label, releasedType, releasedYear, format] 정보를 확인하세요.")
+        }
+        return paths to value
     }
 }
