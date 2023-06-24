@@ -1,9 +1,7 @@
 package io.basquiat.musicshop.common.advice
 
 import com.fasterxml.jackson.databind.exc.InvalidFormatException
-import io.basquiat.musicshop.common.exception.BadParameterException
-import io.basquiat.musicshop.common.exception.MissingInformationException
-import io.basquiat.musicshop.common.exception.NotFoundException
+import io.basquiat.musicshop.common.exception.*
 import io.basquiat.musicshop.common.model.response.ApiError
 import org.springframework.beans.TypeMismatchException
 import org.springframework.core.codec.DecodingException
@@ -99,6 +97,26 @@ class GlobalExceptionHandler {
         }
         return Mono.just(ApiError(
             code = HttpStatus.BAD_REQUEST.value(),
+            message = ex.message!!,
+            timestamp = now(),
+        ))
+    }
+
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    @ExceptionHandler(BadAuthorizeTokenException::class)
+    fun handleBadAuthorizeTokenException(ex: BadAuthorizeTokenException): Mono<ApiError> {
+        return Mono.just(ApiError(
+            code = HttpStatus.UNAUTHORIZED.value(),
+            message = ex.message!!,
+            timestamp = now(),
+        ))
+    }
+
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @ExceptionHandler(DuplicatedMemberException::class)
+    fun handleDuplicatedMemberException(ex: DuplicatedMemberException): Mono<ApiError> {
+        return Mono.just(ApiError(
+            code = HttpStatus.NO_CONTENT.value(),
             message = ex.message!!,
             timestamp = now(),
         ))

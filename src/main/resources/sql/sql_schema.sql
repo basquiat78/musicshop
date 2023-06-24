@@ -22,3 +22,14 @@ CREATE TABLE `record` (
   PRIMARY KEY (`id`),
   CONSTRAINT `record_FK` FOREIGN KEY (`musician_id`) REFERENCES `musician` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- musicshop.member definition
+CREATE TABLE `member` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `email` varchar(100) NOT NULL,
+  `name` varchar(50) NOT NULL,
+  `password` varchar(200) NOT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

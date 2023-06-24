@@ -20,9 +20,8 @@ class WriteMusicianUseCase(
     }
 
     suspend fun update(id: Long, command: UpdateMusician): Musician {
-        val selected = read.musicianByIdOrThrow(id)
-        val (musician, assignments) = command.createAssignments(selected)
-        write.update(musician, assignments)
+        val musician = read.musicianByIdOrThrow(id)
+        write.update(musician.id!!, command.createAssignments())
         return read.musicianById(id)!!
     }
 

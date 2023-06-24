@@ -1,28 +1,21 @@
 package io.basquiat.musicshop.common.model.code
 
 import io.basquiat.musicshop.common.model.request.WhereCondition
-import org.springframework.data.relational.core.query.Criteria
-import org.springframework.data.relational.core.query.Criteria.where
-import org.springframework.data.relational.core.query.isEqual
+import org.jooq.Condition
 
 enum class ConditionType(
     val code: String,
-    private val native: (String, WhereCondition) -> String,
-    private val criteria: (WhereCondition) -> Criteria
+    private val condition: (WhereCondition) -> Condition
 ) {
-    LTE("lte", { prefix, it -> "AND ${prefix}.${it.column} <= '${it.value}'" }, { where(it.column).lessThanOrEquals(it.value)}),
-    LT("lt", { prefix, it -> "AND ${prefix}.${it.column} < '${it.value}'" }, { where(it.column).lessThan(it.value)}),
-    GTE("gte", { prefix, it -> "AND ${prefix}.${it.column} >= '${it.value}'" }, { where(it.column).greaterThanOrEquals(it.value)}),
-    GT("gt", { prefix, it -> "AND ${prefix}.${it.column} > '${it.value}'" }, { where(it.column).greaterThan(it.value)}),
-    EQ("eq", { prefix, it -> "AND ${prefix}.${it.column} = '${it.value}'" }, { where(it.column).isEqual(it.value)}),
-    LIKE("like", { prefix, it -> "AND ${prefix}.${it.column} like '%${it.value}%'" }, { where(it.column).like("%${it.value}%")});
+    LTE("lte", { it.column.lessOrEqual(it.value) }),
+    LT("lt", { it.column.lessThan(it.value) }),
+    GTE("gte", { it.column.greaterOrEqual(it.value) }),
+    GT("gt", { it.column.greaterThan(it.value) }),
+    EQ("eq", { it.column.eq(it.value) }),
+    LIKE("like", { it.column.like("%${it.value}%") });
 
-    fun getCriteria(condition: WhereCondition): Criteria {
-        return criteria(condition)
-    }
-
-    fun getNativeSql(prefix: String, condition: WhereCondition): String {
-        return native(prefix, condition)
+    fun getCondition(condition: WhereCondition): Condition {
+        return condition(condition)
     }
 
     companion object {

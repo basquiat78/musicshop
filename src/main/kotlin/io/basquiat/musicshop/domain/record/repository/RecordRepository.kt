@@ -16,16 +16,4 @@ interface RecordRepository: BaseRepository<Record, Long>, CustomRecordRepository
     @Query("SELECT COUNT(id) FROM record WHERE musician_id = :musicianId")
     suspend fun countByMusicianId(@Param("musicianId") musicianId: Long): Long
 
-    @Query("""
-            SELECT musician.name AS musicianName,
-                   musician.genre,
-                   musician.created_at AS mCreatedAt,
-                   musician.updated_at AS mUpdatedAt,
-                   record.*
-              FROM record
-              INNER JOIN musician
-              ON record.musician_id = musician.id
-        """)
-    fun findRecords(): Flow<Record>
-
 }

@@ -1,9 +1,10 @@
 package io.basquiat.musicshop.api.usecase.record.model
 
 import io.basquiat.musicshop.common.constraint.EnumCheck
+import io.basquiat.musicshop.common.utils.isParamBlankThrow
 import io.basquiat.musicshop.domain.record.model.code.ReleasedType
-import io.basquiat.musicshop.domain.record.model.entity.Record
-import org.springframework.data.relational.core.sql.SqlIdentifier
+import io.basquiat.musicshop.entity.tables.JRecord
+import org.jooq.Field
 
 data class UpdateRecord(
     val title: String? = null,
@@ -13,28 +14,27 @@ data class UpdateRecord(
     var releasedYear: Int? = null,
     var format: String? = null,
 ) {
-    fun createAssignments(record: Record): Pair<Record, MutableMap<SqlIdentifier, Any>> {
-        val assignments = mutableMapOf<SqlIdentifier, Any>()
+    fun createAssignments(): MutableMap<Field<*>, Any> {
+        val assignments = mutableMapOf<Field<*>, Any>()
         title?.let {
-            assignments[SqlIdentifier.unquoted("title")] = it
-            record.title = it
+            isParamBlankThrow(it)
+            assignments[JRecord.RECORD.TITLE] = it
         }
         label?.let {
-            assignments[SqlIdentifier.unquoted("label")] = it
-            record.label = it
+            isParamBlankThrow(it)
+            assignments[JRecord.RECORD.LABEL] = it
         }
         releasedType?.let {
-            assignments[SqlIdentifier.unquoted("releasedType")] = it
-            record.releasedType = ReleasedType.valueOf(it.uppercase())
+            isParamBlankThrow(it)
+            assignments[JRecord.RECORD.RELEASED_TYPE] = it
         }
         releasedYear?.let {
-            assignments[SqlIdentifier.unquoted("releasedYear")] = it
-            record.releasedYear = it
+            assignments[JRecord.RECORD.RELEASED_YEAR] = it
         }
         format?.let {
-            assignments[SqlIdentifier.unquoted("format")] = it
-            record.format = it
+            isParamBlankThrow(it)
+            assignments[JRecord.RECORD.FORMAT] = it
         }
-        return record to assignments
+        return assignments
     }
 }

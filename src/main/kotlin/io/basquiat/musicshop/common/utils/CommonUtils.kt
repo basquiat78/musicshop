@@ -43,7 +43,7 @@ val mapper = jacksonObjectMapper()
  * @param any
  * @return String
  */
-fun toJson(any: Any): String {
+fun <T> toJson(any: T): String {
     mapper.registerModule(JavaTimeModule())
     mapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false)
     return mapper.writeValueAsString(any)

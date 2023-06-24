@@ -1,12 +1,17 @@
 spring:
   profiles:
-    active: local
+    #active: local, custom
+    active: local, redisson
 
 ---
 spring:
   config:
     activate:
       on-profile: local
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
   r2dbc:
     url: r2dbc:proxy:mysql://${mysql.host}:${mysql.port}/${mysql.database}?proxyListener=${mysql.proxy-listener}&${mysql.option}
     username: root
@@ -30,3 +35,23 @@ server:
     whitelabel:
       enabled: false
   port: 8080
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /musicshop
+
+jwt:
+  issuer: basquiat
+  subject: musicshop
+  # 초단위 3600 -> 1시간
+  expired-at: 3600
+  #expired-at: 60
+  # Jean-Michel Basquiat가 사망한 날짜
+  secret: basquiatdie19880812
+  prefix: Bearer
+
+cached:
+  # 초로 받는다.
+  expired-at: 20
