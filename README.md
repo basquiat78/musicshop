@@ -157,13 +157,13 @@ interface MusicianRepository: BaseRepository<Musician, Long>, CustomMusicianRepo
 ```
 여기서 `Pageable`을 파라미터로 받는 `findAllBy`의 경우에는 `suspend`가 없고 `Flow`로 감싸진 것을 알 수 있다.
 
-내부적으로 이 경우에는 `suspend fun findAllBy(pageable: Pageable): List<Musician>`처럼 하게 되면 
+내부적으로 이 경우에는 `suspend fun findAllBy(pageable: Pageable): List<Musician>`처럼 하게 되면
 
 ```
 IllegalStateException: Method has to use a either 
 multi-item reactive wrapper return type or a wrapped Page/Slice type.
 ```
-위와 같은 에러가 난다. 
+위와 같은 에러가 난다.
 
 아마도 이런 방식으로 지원을 하지 않는 듯 싶다.
 
@@ -314,7 +314,7 @@ class ReadMusicianService(
 
 여기서 `toList()`를 통해 `Iterable<T>`형식으로 변환이 가능하지만 `domain`패키지의 경우에는 이대로 사용한다.
 
-`useCase`작성시 `toList()`로 처리할지 또는 그냥 `Flow<T>`로 컨트롤러를 통해 클라이언트로 보내줄지 결정하도록 하자.    
+`useCase`작성시 `toList()`로 처리할지 또는 그냥 `Flow<T>`로 컨트롤러를 통해 클라이언트로 보내줄지 결정하도록 하자.
 
 이제부터 이것이 잘 작동하는지 테스트 코드를 작성해 보자.
 
