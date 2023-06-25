@@ -68,3 +68,5 @@
 [04-using-controller-with-coroutine](https://github.com/basquiat78/musicshop/tree/04-using-controller-with-coroutine)
 
 [05-using-functional-endpoints-with-coroutine](https://github.com/basquiat78/musicshop/tree/05-using-functional-endpoints-with-coroutine)
+
+[06-using-jooq-with-coroutine](https://github.com/basquiat78/musicshop/tree/06-using-jooq-with-coroutine)
