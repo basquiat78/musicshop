@@ -8,9 +8,9 @@ plugins {
 	id("io.spring.dependency-management") version "1.1.0"
 	id("nu.studer.jooq") version "8.2.1"
 	id("org.springdoc.openapi-gradle-plugin") version "1.6.0"
-	kotlin("jvm") version "1.8.21"
-	kotlin("plugin.spring") version "1.8.21"
-	kotlin("kapt") version "1.8.21"
+	kotlin("jvm") version "1.9.0"
+	kotlin("plugin.spring") version "1.9.0"
+	kotlin("kapt") version "1.9.0"
 }
 
 group = "io.basquiat"
@@ -30,10 +30,8 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-validation")
 	implementation("org.springframework.boot:spring-boot-starter-jooq")
 	implementation("org.springframework.boot:spring-boot-starter-aop")
-	implementation("org.springframework.security:spring-security-crypto")
 	implementation("org.springframework.boot:spring-boot-starter-cache")
-
-	//implementation("com.github.ben-manes.caffeine:caffeine:3.1.6")
+	implementation("org.springframework.boot:spring-boot-starter-security")
 
 	implementation("org.redisson:redisson-spring-boot-starter:3.22.1")
 
@@ -63,10 +61,10 @@ dependencies {
 
 	testImplementation("io.projectreactor:reactor-test")
 	testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
+	testImplementation("org.springframework.security:spring-security-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-test") {
 		exclude(module = "junit-vintage-engine")
 	}
-
 
 	project("custom-strategy")
 

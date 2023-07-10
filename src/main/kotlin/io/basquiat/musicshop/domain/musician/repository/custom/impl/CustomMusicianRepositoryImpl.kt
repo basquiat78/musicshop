@@ -63,20 +63,18 @@ class CustomMusicianRepositoryImpl(
         val musician = JMusician.MUSICIAN
         val record = JRecord.RECORD
 
-        val sqlBuilder =
-            query.select(
-                musician,
-                record
-            )
-            .from(musician)
-            .leftJoin(record).on(musician.ID.eq(record.MUSICIAN_ID))
-            .where(musician.ID.eq(id))
+        val sqlBuilder = query.select(
+            musician,
+            record
+        )
+        .from(musician)
+        .leftJoin(record).on(musician.ID.eq(record.MUSICIAN_ID))
+        .where(musician.ID.eq(id))
         return Flux.from(sqlBuilder)
                    .bufferUntilChanged { it.component1() }
-                   .map {
-                        rows ->
-                            val selectMusician = rows[0].component1().into(Musician::class.java)
-                            val records = rows.map { it.component2().into(Record::class.java) }
+                   .map { rows ->
+                        val selectMusician = rows[0].component1().into(Musician::class.java)
+                        val records = rows.map { it.component2().into(Record::class.java) }
                         selectMusician.records = records
                         selectMusician
                    }.awaitSingle()

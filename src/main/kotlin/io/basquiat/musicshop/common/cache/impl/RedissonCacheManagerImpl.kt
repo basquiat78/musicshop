@@ -32,7 +32,7 @@ class RedissonCacheManagerImpl<T> (
         return redissonClient.getBucket<String>(getPrefixKey(key, clazz), StringCodec.INSTANCE)
                              .get()
                              .awaitSingleOrNull()?.let {
-                                    fromJson(it, Any::class.java) as T
+                                    fromJson(it, clazz)
                              } ?: cacheIfEmpty(key, clazz, receiver)
     }
 
