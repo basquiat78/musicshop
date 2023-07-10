@@ -62,7 +62,7 @@ springdoc:
 
 [http://localhost:8080/musicshop](http://localhost:8080/musicshop)
 
-`api-docs`를 띄우는데만 포커스를 둔다. 
+`api-docs`를 띄우는데만 포커스를 둔다.
 
 따라서 컨트롤러나 객체에 어노테이션을 덕지덕지 붙이지 않을 것이다.
 
@@ -74,7 +74,7 @@ springdoc:
 
 해당 어플리케이션으로부터 `jwt`토큰을 받는 것 자체가 디비로부터 특정 아이디 또는 이메일이나 전화번호를 유니크 아이디로 패스워드를 받아서 체크하고 생성하기 때문이다.
 
-따라서 일반적으로 `jwt`토큰을 생성할 떄는 유니크 아이디와 `Role`이 있다면 `Role`정보 정도만 가지고 생성하는 것이 좋다. 
+따라서 일반적으로 `jwt`토큰을 생성할 떄는 유니크 아이디와 `Role`이 있다면 `Role`정보 정도만 가지고 생성하는 것이 좋다.
 
 패스워드는 포함하지 않는 방식이 좀 더 안전한 방식일 것이다.
 
@@ -116,7 +116,7 @@ dependencies {
 
 # 암복호화 및 비밀번호 암호화
 
-`CryptoUtils`유틸리티 
+`CryptoUtils`유틸리티
 
 ```kotlin
 class CryptoUtils {
@@ -156,7 +156,7 @@ class CryptoUtils {
 }
 
 ```
-굉장히 일반적인 코드로 흔하게 사용하는 양방향 방식은 `AES`채택한다. 
+굉장히 일반적인 코드로 흔하게 사용하는 양방향 방식은 `AES`채택한다.
 
 `이메일/핸드폰번호/주민번호`같은 개인정보의 경우에는 비지니스 로직상에서 복호화해서 사용해야 하는 경우가 있다.
 
@@ -178,7 +178,7 @@ class CryptoUtils {
 
 어째든 저 라이브러리는 우리가 자주 만나게 되는 `baeldung`사이트에서 아주 친절하게 설명하고 있다.
 
-[Managing JWT With Auth0 java-jwt](https://www.baeldung.com/java-auth0-jwt)      
+[Managing JWT With Auth0 java-jwt](https://www.baeldung.com/java-auth0-jwt)
 
 아시는 분들은 패스해도 되고 처음 하시는 분들은 한번 읽어 보시면 될 것이다.
 
@@ -411,7 +411,7 @@ suspend fun fetchMusician(@PathVariable("id") id: Long, @AuthorizeToken @Paramet
 ```
 이제는 커스텀 리졸버를 만들어 보자.
 
-`HandlerMethodArgumentResolver`는 `MVC`와 `WebFlux`용이 따로 존재한다. 
+`HandlerMethodArgumentResolver`는 `MVC`와 `WebFlux`용이 따로 존재한다.
 
 이에 맞춰 상속을 하고 구현을 하도록 하자.
 
@@ -456,7 +456,7 @@ class WebFluxConfiguration(
 ```
 이제는 스웨거를 접속해 보자.
 
-먼저 `/api/v1/musicians/{id}`를 실행하면 `Authorization`가 없기 때문에 
+먼저 `/api/v1/musicians/{id}`를 실행하면 `Authorization`가 없기 때문에
 
 ```json
 {
@@ -478,7 +478,7 @@ class WebFluxConfiguration(
 
 어째든 여기서 그냥 `xxxxxxxxxxx`같은 아무 값이나 넣는다.
 
-그리고 실행을 하게 되면 
+그리고 실행을 하게 되면
 
 ```
 curl -X 'GET' \
@@ -490,7 +490,7 @@ curl -X 'GET' \
 
 실제로 스웨거 문서에는 `PathVariable`만 설정해도 헤더에 토큰 정보를 넘겨주고 이것을 리졸버가 받아서 처리한다.
 
-그래서 토큰 값이 넘어오게 된다. 
+그래서 토큰 값이 넘어오게 된다.
 
 디버깅을 해보면 바로 알 수도 있고 로그를 찍어 봐도 바로 알수 있다.
 
@@ -524,7 +524,7 @@ curl -X 'GET' \
 
 # 시나리오
 
-먼저 가입과 로그인은 토큰과 관련이 없다. 
+먼저 가입과 로그인은 토큰과 관련이 없다.
 
 하지만 여기서 뮤지션의 정보와 레코드 정보를 가져오는 `API`의 경우에는 오픈하고 생성 및 업데이트 부분에는 토큰 정보를 가진 사용자만 가능하도록 한다.
 
@@ -702,7 +702,7 @@ class MusicianController(
 
 먼저 우리가 `yml`에서 토큰의 만료기간을 3600초, 즉 1시간을 잡았는데 이것을 대충 60으로 1분으로 잡아서 테스트를 해보자.
 
-그렇다면 1분 경과 후에 토큰이 만료되었다는 메세지를 보내 줄 것이다. 
+그렇다면 1분 경과 후에 토큰이 만료되었다는 메세지를 보내 줄 것이다.
 
 # 하지만 이 방식은 문제가 있다.
 
@@ -738,7 +738,7 @@ class MusicianController(
 
 ~~실력 문제 ㅠㅠ~~
 
-일단 
+일단
 
 ```groovy
 dependencies {
@@ -823,7 +823,7 @@ class MemberCacheService(
 ```
 캐시도 결국 메모리를 사용한다.
 
-이 말은 캐시 전략을 사용할 때 만료기간을 고려해야 한다. 
+이 말은 캐시 전략을 사용할 때 만료기간을 고려해야 한다.
 
 벤치마킹 대상은 `Caffeine`이다.
 
@@ -849,13 +849,13 @@ class CustomCacheManager<T> {
 
 }
 ```
-기본적인 것은 위와 같을 것이다. 
+기본적인 것은 위와 같을 것이다.
 
 하지만 여기서 캐시의 만료기간을 설정할 수 있는 방법이 없다.
 
 따라서 여기서 실제로 캐시에 저장해야 하는 경우에는 `value`쪽에 담아야 하는데 방법은 래퍼 클래스를 만들어서 담을 수 밖에 없다.
 
-`Cached`라는 래퍼 클래스를 만들 것이다. 
+`Cached`라는 래퍼 클래스를 만들 것이다.
 
 속성은 객체 정보와 `LocalDateTime`을 가진다.
 
