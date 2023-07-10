@@ -72,3 +72,5 @@
 [06-using-jooq-with-coroutine](https://github.com/basquiat78/musicshop/tree/06-using-jooq-with-coroutine)
 
 [07-using-querydsl-with-coroutine](https://github.com/basquiat78/musicshop/tree/07-using-querydsl-with-coroutine)
+
+[08-webflux-with-jwt](https://github.com/basquiat78/musicshop/tree/08-webflux-with-jwt)
