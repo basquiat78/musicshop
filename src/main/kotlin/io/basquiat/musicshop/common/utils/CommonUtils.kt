@@ -35,7 +35,10 @@ fun isParamBlankThrow(value: String) {
 /**
  * kotlin jackson object mapper
  */
-val mapper = jacksonObjectMapper()
+val mapper = jacksonObjectMapper().also {
+    it.registerModule(JavaTimeModule())
+    it.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false)
+}
 
 /**
  * 객체를 받아서 json 스트링으로 반환한다.
@@ -43,11 +46,7 @@ val mapper = jacksonObjectMapper()
  * @param any
  * @return String
  */
-fun <T> toJson(any: T): String {
-    mapper.registerModule(JavaTimeModule())
-    mapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false)
-    return mapper.writeValueAsString(any)
-}
+fun <T> toJson(any: T): String = mapper.writeValueAsString(any)
 
 /**
  * json 스트링을 해당 객체로 매핑해서 반환한다.
@@ -57,3 +56,5 @@ fun <T> toJson(any: T): String {
  * @return T
  */
 fun <T> fromJson(json: String, valueType: Class<T>): T = mapper.readValue(json, valueType)
+
+fun <T> toByte(any: T): ByteArray = mapper.writeValueAsBytes(any)

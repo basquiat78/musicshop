@@ -23,7 +23,7 @@ class MemberCacheService(
             val decodedJWT = decodedJWT(token, props)
             val id = memberIdFromJWT(decodedJWT)
             val email = emailFromJWT(decodedJWT)
-            memberRepository.findByIdAndEmail(id, encrypt(email)) ?: notFound("아이디 [$id]와 이메일 [$email]로 조회된 멤버가 없습니다.")
+            memberRepository.memberWithRoles(id, encrypt(email)) ?: notFound("아이디 [$id]와 이메일 [$email]로 조회된 멤버가 없습니다.")
         }
     }
 

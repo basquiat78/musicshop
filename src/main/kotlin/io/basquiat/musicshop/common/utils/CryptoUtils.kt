@@ -1,6 +1,8 @@
 package io.basquiat.musicshop.common.utils
 
 import org.springframework.security.crypto.bcrypt.BCrypt
+import org.springframework.security.crypto.bcrypt.BCrypt.checkpw
+import org.springframework.security.crypto.bcrypt.BCrypt.hashpw
 import java.nio.charset.StandardCharsets
 import java.util.*
 import javax.crypto.Cipher
@@ -36,9 +38,9 @@ class CryptoUtils {
             return String(cipher.doFinal(Base64.getDecoder().decode(cipherText)), StandardCharsets.UTF_8)
         }
 
-        fun encryptPassword(password: String): String = BCrypt.hashpw(password, BCrypt.gensalt())
+        fun encryptPassword(password: String): String = hashpw(password, BCrypt.gensalt())
 
-        fun matchPassword(password: String, encrypted: String) = BCrypt.checkpw(password, encrypted)
+        fun matchPassword(password: String, encrypted: String) = checkpw(password, encrypted)
 
     }
 }
