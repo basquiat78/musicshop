@@ -76,3 +76,5 @@
 [08-webflux-with-jwt](https://github.com/basquiat78/musicshop/tree/08-webflux-with-jwt)
 
 [09-webflux-with-security](https://github.com/basquiat78/musicshop/tree/09-webflux-with-security)
+
+[스프링 시큐리티와 필터를 이용한 번외편](https://github.com/basquiat78/musicshop/tree/spring-security-extra)
