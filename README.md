@@ -68,7 +68,7 @@ public class WebSessionServerSecurityContextRepository implements ServerSecurity
 
 ~~응 처음에는 생각 안했어~~
 
-이럴거면 차라리 세션을 쓰는게 더 이득같다는 생각이 든다.     
+이럴거면 차라리 세션을 쓰는게 더 이득같다는 생각이 든다.
 
 # 변경된 사항
 
@@ -280,7 +280,7 @@ Filter와 Interceptor의 차이가 뭔지 아세요?
 
 마치 스프링 컨텍스트 밖에서 처리되는 것처럼 작동하면서 디버깅이 걸리지 않는다는 것을 알 수 있다.
 
-바로 스프링 시큐리티가 필터같은 역할을 한다는 것을 알 수 있다. 
+바로 스프링 시큐리티가 필터같은 역할을 한다는 것을 알 수 있다.
 
 이 필터를 통해 어떤 행위를 정의해야 한다.
 
@@ -540,7 +540,7 @@ public UsernamePasswordAuthenticationToken(Object principal, Object credentials,
 ```
 전략은 처음 `load`시에는 두 개의 파라미터를 받는 생성자를 통해서 아직 인증되지 않는 상태로 생성한다.
 
-그리고 이 값을 `CustomAuthenticationManager`로 넘겨줄 것이다. 
+그리고 이 값을 `CustomAuthenticationManager`로 넘겨줄 것이다.
 
 ```kotlin
 @Component
@@ -768,7 +768,7 @@ class SecurityConfiguration
 
 [EnableReactiveMethodSecurity](https://docs.spring.io/spring-security/reference/reactive/authorization/method.html)
 
-일단 위 사이트를 보면 코틀린 코루틴을 이용할 때는 일반적인 방식으로는 사용할 수 없다.     
+일단 위 사이트를 보면 코틀린 코루틴을 이용할 때는 일반적인 방식으로는 사용할 수 없다.
 
 실제로 이것을 적용하게 되면 아래와 같은 에러가 찍힌다.
 
