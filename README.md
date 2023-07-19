@@ -555,7 +555,7 @@ class CustomSecurityContextRepository(
     override fun load(exchange: ServerWebExchange): Mono<SecurityContext> = mono {
         exchange.request.headers["Authorization"]?.first()?.let { bearerToken ->
             val token = extractToken(bearerToken, props)
-            val auth = CustomAuthenticationToken(token, token)
+            val auth = UsernamePasswordAuthenticationToken(token, token)
             SecurityContextImpl(auth)
         }
     }
