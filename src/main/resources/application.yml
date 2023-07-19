@@ -36,11 +36,11 @@ server:
       enabled: false
   port: 8080
 
-#springdoc:
-#  api-docs:
-#    path: /api-docs
-#  swagger-ui:
-#    path: /musicshop
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /musicshop
 
 jwt:
   issuer: basquiat
